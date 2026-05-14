@@ -1,7 +1,7 @@
 import json
 from collections.abc import AsyncIterator
-from uuid import uuid4
 
+from math_agent_api.db.session import SessionLocal
 from math_agent_api.prompts.chat import build_chat_messages
 from math_agent_api.providers.llm import (
     LLMProvider,
@@ -17,6 +17,7 @@ from math_agent_api.schemas.chat import (
     StartEvent,
 )
 from math_agent_api.schemas.common import ErrorBody, QuestionType
+from math_agent_api.services.session_service import append_message, create_session_id, ensure_session
 
 
 def format_sse(event: str, data: dict) -> str:
@@ -42,7 +43,7 @@ def should_visualize(question_type: QuestionType) -> bool:
 
 
 async def stream_mock_chat(request: ChatStreamRequest) -> AsyncIterator[str]:
-    session_id = request.session_id or f"session-{uuid4()}"
+    session_id = request.session_id or create_session_id()
     question_type = classify_question(request.confirmed_ocr_text or request.message)
 
     async for event in stream_chat_with_provider(
@@ -54,8 +55,19 @@ async def stream_mock_chat(request: ChatStreamRequest) -> AsyncIterator[str]:
         yield event
 
 
-async def stream_chat(request: ChatStreamRequest) -> AsyncIterator[str]:
-    session_id = request.session_id or f"session-{uuid4()}"
+async def stream_chat(request: ChatStreamRequest, db=None) -> AsyncIterator[str]:
+    if db is not None:
+        async for event in _stream_chat(request, db):
+            yield event
+        return
+
+    with SessionLocal() as created_db:
+        async for event in _stream_chat(request, created_db):
+            yield event
+
+
+async def _stream_chat(request: ChatStreamRequest, db=None) -> AsyncIterator[str]:
+    session_id = request.session_id or create_session_id()
     question_type = classify_question(request.confirmed_ocr_text or request.message)
     try:
         provider = get_llm_provider()
@@ -74,6 +86,7 @@ async def stream_chat(request: ChatStreamRequest) -> AsyncIterator[str]:
         session_id=session_id,
         question_type=question_type,
         provider=provider,
+        db=db,
     ):
         yield event
 
@@ -117,7 +130,20 @@ async def stream_chat_with_provider(
     session_id: str,
     question_type: QuestionType,
     provider: LLMProvider,
+    db=None,
 ) -> AsyncIterator[str]:
+    active_message = request.confirmed_ocr_text or request.message
+    ensure_session(db, session_id, default_answer_mode=request.answer_mode)
+    append_message(
+        db,
+        session_id=session_id,
+        role="user",
+        content=active_message,
+        answer_mode=request.answer_mode,
+        question_type=question_type,
+        source="ocr" if request.confirmed_ocr_text else "text",
+    )
+
     yield format_sse(
         "start",
         StartEvent(session_id=session_id, answer_mode=request.answer_mode).model_dump(mode="json"),
@@ -134,8 +160,19 @@ async def stream_chat_with_provider(
 
     try:
         messages = build_chat_messages(request, question_type)
+        answer_parts: list[str] = []
         async for chunk in provider.stream_chat(messages):
+            answer_parts.append(chunk)
             yield format_sse("delta", DeltaEvent(text=chunk).model_dump(mode="json"))
+        append_message(
+            db,
+            session_id=session_id,
+            role="assistant",
+            content="".join(answer_parts),
+            answer_mode=request.answer_mode,
+            question_type=question_type,
+            source=getattr(provider, "name", "unknown"),
+        )
         yield format_sse("done", DoneEvent().model_dump(mode="json"))
     except LLMProviderError:
         async for event in stream_chat_error_tail(getattr(provider, "name", "unknown")):

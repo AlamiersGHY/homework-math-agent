@@ -90,10 +90,11 @@ Turn the current chat-only slice into a cohesive local MVP demo with chat, answe
 - OCR strategy is Doubao-first for the real provider, mock-first for automated development and tests, with Mathpix kept as the future professional OCR adapter.
 - Session history is accepted as local SQLite-backed demo persistence only.
 - UI direction is a productized learning workspace: left session rail, central chat/learning area, text/image input modes, inline OCR confirmation, and inline plot viewer. Backend/debug metadata should not be exposed as normal user-facing UI.
+- Backend now has lightweight SQLite session/message/artifact persistence and session read APIs.
+- Chat stream now records user and assistant messages when a session is active.
 
 ## Next Tasks
 
-- Implement lightweight SQLite session/message/artifact persistence with tests.
 - Implement `POST /ocr/recognize` through OCR service/provider boundaries, using mock fallback and Doubao configuration placeholders.
 - Implement `POST /plots/preview` for Plotly-style `function2d` and `surface3d` specs, then connect the frontend Plot viewer.
 - Refactor the frontend workspace into chat, OCR, plots, and session surfaces without showing backend debug metadata as normal UI.

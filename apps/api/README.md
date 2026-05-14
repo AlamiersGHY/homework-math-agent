@@ -28,6 +28,7 @@ Copy-Item .env.example .env
 Default first real provider target:
 
 ```env
+DATABASE_URL=sqlite:///math_agent.db
 LLM_PROVIDER=openai_compatible
 LLM_BASE_URL=https://api.deepseek.com
 LLM_MODEL=deepseek-v4-flash
@@ -36,6 +37,16 @@ LLM_MOCK_FALLBACK=true
 ```
 
 `.env` is ignored by Git. If `LLM_API_KEY` is empty and `LLM_MOCK_FALLBACK=true`, `/chat/stream` keeps using the local mock stream.
+
+## Local Session Data
+
+The MVP demo stores lightweight local session history in SQLite. By default the API uses:
+
+```env
+DATABASE_URL=sqlite:///math_agent.db
+```
+
+This stores sessions, messages, and future OCR/plot artifacts in `apps/api/math_agent.db`. The database file is ignored by Git.
 
 ## Test
 
@@ -47,3 +58,5 @@ Current scaffold implements:
 
 - `GET /health`
 - `POST /chat/stream` SSE endpoint with OpenAI-compatible LLM provider support and mock fallback
+- `GET /sessions`
+- `GET /sessions/{session_id}`

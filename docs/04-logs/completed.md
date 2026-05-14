@@ -114,3 +114,11 @@
 - Confirmed exclusions for this demo: no RAG, no LangGraph, no login/account system, no professional implicit-surface modeling.
 - Recorded `ADR-006-ocr-provider-strategy.md`: mock-first for tests, Doubao Vision as the preferred live MVP OCR provider, and Mathpix as a future professional adapter.
 - Clarified the target UI direction as a productized learning workspace rather than a debug-heavy chat panel.
+
+## Lightweight Session Persistence
+
+- Added SQLite-backed session, message, and artifact tables for local demo history.
+- Added backend session repository/service boundaries and `GET /sessions` / `GET /sessions/{session_id}` APIs.
+- Updated chat streaming so user and assistant messages are persisted without changing the SSE contract.
+- Documented `DATABASE_URL` in the API environment example and README.
+- Verified backend pytest with session persistence coverage.
