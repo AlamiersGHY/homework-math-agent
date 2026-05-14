@@ -99,3 +99,10 @@
 - Added follow-up suggestion chips after completed answers for quick next-turn actions such as direct answer, hint, guided explanation, or similar exercise.
 - Updated the web README and active work log to reflect the current Phase 1 chat experience state.
 - Verified frontend typecheck, frontend production build, backend pytest, and headless Chrome layout rendering of the starter screen.
+
+## Math Rendering Feedback Fix
+
+- Classified user feedback as a current MVP UX/Agent behavior issue because formula readability is central to the chat learning loop.
+- Added frontend normalization for common bare LaTeX output patterns before Markdown rendering, including `\(...\)`, `\[...\]`, bare LaTeX command runs, and bracketed formula lines.
+- Tightened the backend chat prompt so real LLM output should use `$...$` and `$$...$$` delimiters instead of bare `\frac`, `\lim`, or square-bracketed formulas.
+- Added an eval case requiring renderable Markdown LaTeX and forbidding bare math commands in answer output.

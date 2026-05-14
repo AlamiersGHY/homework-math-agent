@@ -18,7 +18,9 @@ def build_chat_messages(request: ChatStreamRequest, question_type: QuestionType)
             "你的目标不是泛泛聊天，而是帮助用户理解数学分析中的概念、计算、证明和可视化问题。",
             _mode_instruction(request.answer_mode),
             f"后端初步识别题型为 {question_type.value}，你可以参考但不要机械服从。",
-            "数学表达尽量使用清晰的 LaTeX。",
+            "数学表达必须使用 Markdown + LaTeX：行内公式一律写成 `$...$`，独立公式一律写成 `$$...$$`。",
+            "不要输出裸露的 `\\frac`、`\\lim`、`\\sin` 等 LaTeX 命令；不要用 `[ ... ]` 包公式。",
+            "三角函数和变量之间要留清楚边界，例如写 `$\\sin x$`、`$\\frac{\\sin x}{x}$`，不要写成 `sinxsinx`。",
             "如果没有检索上下文，不要编造教材页码、定理编号或资料来源。",
             "如果题目需要图形理解，可以在文字中提示可视化价值，但不要假装已经渲染出图。",
         ]
@@ -33,4 +35,3 @@ def build_chat_messages(request: ChatStreamRequest, question_type: QuestionType)
 
     messages.append({"role": "user", "content": problem})
     return messages
-

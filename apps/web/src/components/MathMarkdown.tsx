@@ -3,6 +3,7 @@
 import ReactMarkdown from "react-markdown";
 import rehypeKatex from "rehype-katex";
 import remarkMath from "remark-math";
+import { normalizeMathMarkdown } from "@/lib/math/normalizeMathMarkdown";
 
 export function MathMarkdown({
   children,
@@ -11,6 +12,8 @@ export function MathMarkdown({
   children: string;
   inverted?: boolean;
 }) {
+  const normalizedContent = normalizeMathMarkdown(children);
+
   return (
     <div className={inverted ? "math-markdown math-markdown-inverted" : "math-markdown"}>
       <ReactMarkdown
@@ -24,9 +27,8 @@ export function MathMarkdown({
           )
         }}
       >
-        {children}
+        {normalizedContent}
       </ReactMarkdown>
     </div>
   );
 }
-

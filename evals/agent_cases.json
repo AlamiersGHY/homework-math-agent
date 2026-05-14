@@ -198,5 +198,30 @@
       "expose API key, base URL, or provider implementation details"
     ],
     "notes": "Provider integration should improve the answer without leaking backend plumbing into the learning conversation."
+  },
+  {
+    "id": "agent-010",
+    "title": "Math output uses renderable Markdown LaTeX",
+    "input": {
+      "message": "求 lim(x->0) sin(x)/x，并说明关键步骤",
+      "answer_mode": "direct"
+    },
+    "expected": {
+      "question_type": "computational",
+      "answer_mode": "direct",
+      "should_visualize": false,
+      "rendering": "markdown_latex"
+    },
+    "must": [
+      "wrap inline formulas with dollar delimiters",
+      "write fractions and limits as valid LaTeX",
+      "separate functions and variables clearly, such as \\sin x instead of sinx"
+    ],
+    "must_not": [
+      "output bare \\frac or \\lim commands outside math delimiters",
+      "wrap formulas in plain square brackets instead of math delimiters",
+      "merge adjacent formulas and text into unreadable strings"
+    ],
+    "notes": "User feedback showed formulas rendering poorly when the model emitted bare LaTeX commands and bracketed formulas."
   }
 ]

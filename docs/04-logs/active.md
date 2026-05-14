@@ -43,6 +43,7 @@ Stabilize the first usable chat learning experience before moving into OCR and P
 - `apps/web/src/components/MathMarkdown.tsx`
 - `apps/web/src/features/chat/ChatWorkspace.tsx`
 - `apps/web/src/lib/api/chatStream.ts`
+- `apps/web/src/lib/math/normalizeMathMarkdown.ts`
 - `apps/web/src/types/chat.ts`
 - `apps/api/README.md`
 - `apps/api/requirements.txt`
@@ -77,12 +78,14 @@ Stabilize the first usable chat learning experience before moving into OCR and P
 - Frontend chat messages now support Markdown and LaTeX rendering.
 - Frontend chat has a lightweight new-session flow and can return to the starter screen.
 - Completed answers now show follow-up suggestion chips for one-click next turns.
+- User feedback exposed poor formula rendering from bare LaTeX output; frontend now normalizes common bare LaTeX patterns before Markdown rendering.
+- Backend prompt now explicitly requires renderable Markdown LaTeX delimiters for formulas.
 
 ## Next Tasks
 
 - Add a local `apps/api/.env` with a real `LLM_API_KEY` and run a live DeepSeek smoke test.
 - Tune prompt wording after reviewing the first real model outputs for direct/guided/hint modes.
-- Review the first Markdown/LaTeX rendering behavior with real model outputs and tighten styles if needed.
+- Review formula rendering with real model outputs again after the hardening fix.
 - Add project-level wrapper scripts for common `dev`, `test`, and `check` workflows.
 - Start connecting eval cases to an executable runner after the first chat slice exists.
 - Add OCR and plot endpoint skeletons when their first UI flows are ready.
@@ -96,6 +99,7 @@ Stabilize the first usable chat learning experience before moving into OCR and P
 - New implementation should keep route handlers thin and use service/provider boundaries from architecture docs.
 - API changes must stay aligned with `docs/01-architecture/api-contracts.md`.
 - Frontend chat work should use native `fetch` stream for `POST /chat/stream`.
+- Math rendering/UI tasks must be checked with at least one formula-heavy answer, not only the empty starter screen.
 - Fuzzy feature or UI ideas should start with `docs/02-workflow/planning-workflow.md` and a short solution card.
 - Before finalizing a coding task, run the relevant app-local tests or explain what could not be verified.
 - After completing a coherent deliverable unit, create a local Git checkpoint commit unless blocked by unrelated changes or explicit user instruction.

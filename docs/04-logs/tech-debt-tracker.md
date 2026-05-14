@@ -10,6 +10,7 @@ This file tracks known deferred work and risks. Items here are not current MVP b
 | TD-004 | README | Root README described the project as foundation-stage before scaffold. | Resolved by the scaffold status refresh. | Keep README synchronized at milestone boundaries. | Phase 1 | closed |
 | TD-005 | Dependencies | `npm audit --omit=dev` reports 2 moderate findings through Next/PostCSS after initial install. | Should be reviewed before public demo or deployment; current scaffold is still runnable. | Do not force downgrade Next during scaffold; revisit during release check or dependency update. | Phase 1 | open |
 | TD-006 | Provider | Real DeepSeek live smoke has not run because no local API key is configured yet. | Code path is tested with mock/fake providers, but real provider auth/network behavior is not verified locally. | Add `apps/api/.env` with a real key and run `/chat/stream` live smoke before prompt tuning. | Phase 1 | open |
+| TD-007 | Verification | Running `npm run typecheck` in parallel with `npm run build` can race on generated `.next/types` files. | Parallel verification may produce a false negative even when code and build are valid. | Project-level `check` script should run Next build/typecheck sequentially or cleanly isolate generated types. | Phase 1 | open |
 
 ## Status Values
 
