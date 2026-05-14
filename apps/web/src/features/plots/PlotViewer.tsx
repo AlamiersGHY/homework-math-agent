@@ -58,11 +58,28 @@ export function PlotViewer({ plot }: { plot: PlotPreviewResponse }) {
   }, [plot]);
 
   return (
-    <div className="overflow-hidden rounded-lg border border-neutral-200 bg-white">
-      <div ref={containerRef} className="h-[320px] w-full sm:h-[420px]" />
-      <p className="border-t border-neutral-100 px-4 py-3 text-sm leading-6 text-neutral-600">
+    <section className="overflow-hidden rounded-lg border border-neutral-200 bg-white shadow-sm">
+      <div className="flex flex-col gap-1 border-b border-neutral-100 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p className="text-sm font-semibold text-neutral-950">可视化图形</p>
+          <p className="text-xs text-neutral-500">{getPlotTypeLabel(plot.plot_type)}</p>
+        </div>
+        <span className="text-xs font-medium text-neutral-500">可拖拽、缩放查看</span>
+      </div>
+      <div ref={containerRef} className="h-[340px] w-full sm:h-[460px]" />
+      <p className="border-t border-neutral-100 px-4 py-3 text-sm leading-6 text-neutral-700">
         {plot.explanation}
       </p>
-    </div>
+    </section>
   );
+}
+
+function getPlotTypeLabel(plotType: PlotPreviewResponse["plot_type"]) {
+  if (plotType === "surface3d") {
+    return "三维曲面";
+  }
+  if (plotType === "region2d") {
+    return "二维区域";
+  }
+  return "二维函数";
 }

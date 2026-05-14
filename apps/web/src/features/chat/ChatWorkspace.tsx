@@ -30,6 +30,11 @@ const answerModes: Array<{
   { value: "hint", label: "仅提示", description: "保留独立思考空间" }
 ];
 
+const inputModeLabels: Record<InputMode, string> = {
+  text: "输入题目",
+  image: "图片识别"
+};
+
 const examples = [
   {
     label: "极限计算",
@@ -47,12 +52,6 @@ const examples = [
     mode: "direct" as AnswerMode
   }
 ];
-
-const modeLabels: Record<AnswerMode, string> = {
-  direct: "直接解答",
-  guided: "分步引导",
-  hint: "仅提示"
-};
 
 const questionTypeLabels: Record<QuestionType, string> = {
   conceptual: "概念理解",
@@ -126,6 +125,8 @@ export function ChatWorkspace() {
   );
   const latestAssistant = [...messages].reverse().find((message) => message.role === "assistant");
   const activePlotSuggestion = latestAssistant?.plotSuggestion ?? metadata.plotSuggestion;
+  const currentSessionTitle =
+    sessions.find((session) => session.id === metadata.sessionId)?.title ?? "新学习会话";
 
   useEffect(() => {
     refreshHealth();
@@ -414,7 +415,7 @@ export function ChatWorkspace() {
   }
 
   return (
-    <main className="min-h-screen bg-[#f4f3ee] text-neutral-950">
+    <main className="min-h-screen bg-[#f7f7f4] text-neutral-950">
       <div className="flex min-h-screen">
         <SessionRail
           activeSessionId={metadata.sessionId}
@@ -424,19 +425,29 @@ export function ChatWorkspace() {
           sessions={sessions}
         />
 
-        <section className="flex min-h-screen min-w-0 flex-1 flex-col">
-          <header className="border-b border-neutral-200 bg-white/85 px-4 py-4 backdrop-blur sm:px-6">
-            <div className="mx-auto flex max-w-5xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-700">
-                  Math Agent
-                </p>
-                <h1 className="mt-1 text-2xl font-semibold tracking-normal">
-                  数学分析学习工作台
-                </h1>
+        <section className="flex h-screen min-w-0 flex-1 flex-col">
+          <header className="shrink-0 border-b border-neutral-200 bg-white/90 px-4 py-3 backdrop-blur sm:px-6">
+            <div className="mx-auto flex max-w-6xl flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-neutral-950 text-sm font-semibold text-white">
+                    M
+                  </span>
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-emerald-700">
+                      Math Agent
+                    </p>
+                    <h1 className="truncate text-xl font-semibold tracking-normal text-neutral-950 sm:text-2xl">
+                      数学分析学习工作台
+                    </h1>
+                  </div>
+                </div>
               </div>
               <div className="flex flex-wrap items-center gap-2 text-sm">
-                <span className="rounded-full border border-neutral-200 bg-neutral-50 px-3 py-1 font-medium text-neutral-700">
+                <span className="min-w-0 max-w-full truncate rounded-full border border-neutral-200 bg-neutral-50 px-3 py-1 font-medium text-neutral-700">
+                  {currentSessionTitle}
+                </span>
+                <span className="rounded-full border border-neutral-200 bg-white px-3 py-1 font-medium text-neutral-700">
                   {currentMode.label}
                 </span>
                 <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 font-medium text-emerald-800">
@@ -446,8 +457,15 @@ export function ChatWorkspace() {
             </div>
           </header>
 
+          <MobileSessionStrip
+            activeSessionId={metadata.sessionId}
+            onNewSession={startNewSession}
+            onPickSession={loadSession}
+            sessions={sessions}
+          />
+
           <div
-            className="mx-auto flex w-full max-w-5xl flex-1 flex-col overflow-y-auto px-4 py-5 sm:px-6"
+            className="mx-auto flex w-full max-w-6xl flex-1 flex-col overflow-y-auto px-4 py-4 sm:px-6 lg:py-6"
             ref={transcriptRef}
           >
             {messages.length === 0 ? (
@@ -458,7 +476,7 @@ export function ChatWorkspace() {
                 }}
               />
             ) : (
-              <div className="space-y-5">
+              <div className="space-y-5 pb-2">
                 {messages.map((message) => (
                   <MessageBubble
                     key={message.id}
@@ -477,7 +495,7 @@ export function ChatWorkspace() {
 
           {error ? (
             <div className="border-t border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700 sm:px-6">
-              <div className="mx-auto max-w-5xl">{error}</div>
+              <div className="mx-auto max-w-6xl">{error}</div>
             </div>
           ) : null}
 
@@ -522,8 +540,16 @@ function SessionRail({
   return (
     <aside className="hidden w-72 shrink-0 border-r border-neutral-200 bg-neutral-950 text-white lg:flex lg:flex-col">
       <div className="border-b border-white/10 p-4">
+        <div className="mb-4">
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-white/45">
+            Learning Sessions
+          </p>
+          <p className="mt-1 text-sm leading-6 text-white/70">
+            本机保存的学习回合，可随时回到上一题。
+          </p>
+        </div>
         <button
-          className="w-full rounded-md bg-white px-3 py-2 text-sm font-semibold text-neutral-950 transition hover:bg-emerald-50"
+          className="w-full rounded-md bg-white px-3 py-2.5 text-sm font-semibold text-neutral-950 transition hover:bg-emerald-50"
           onClick={onNewSession}
           type="button"
         >
@@ -542,9 +568,9 @@ function SessionRail({
           ) : (
             sessions.map((session) => (
               <button
-                className={`w-full rounded-md px-3 py-2 text-left text-sm leading-5 transition ${
+                className={`w-full rounded-md px-3 py-2.5 text-left text-sm leading-5 transition ${
                   activeSessionId === session.id
-                    ? "bg-emerald-500 text-neutral-950"
+                    ? "bg-emerald-400 text-neutral-950"
                     : "text-white/75 hover:bg-white/10 hover:text-white"
                 }`}
                 key={session.id}
@@ -566,18 +592,62 @@ function SessionRail({
 
 function HealthPill({ health }: { health: HealthState }) {
   if (health.status === "checking") {
-    return <span className="text-sm text-white/55">API 检查中</span>;
+    return <span className="text-sm text-white/55">服务连接中</span>;
   }
 
   if (health.status === "offline") {
     return (
       <span className="text-sm text-amber-200" title={health.message}>
-        API 未连接
+        服务暂不可用
       </span>
     );
   }
 
-  return <span className="text-sm text-emerald-200">API {health.data.version}</span>;
+  return <span className="text-sm text-emerald-200">服务已连接</span>;
+}
+
+function MobileSessionStrip({
+  activeSessionId,
+  onNewSession,
+  onPickSession,
+  sessions
+}: {
+  activeSessionId: string | null;
+  onNewSession: () => void;
+  onPickSession: (sessionId: string) => void;
+  sessions: SessionSummary[];
+}) {
+  return (
+    <div className="shrink-0 border-b border-neutral-200 bg-white px-4 py-2 lg:hidden">
+      <div className="flex items-center gap-2 overflow-x-auto pb-1">
+        <button
+          className="h-9 shrink-0 rounded-md bg-neutral-950 px-3 text-sm font-semibold text-white"
+          onClick={onNewSession}
+          type="button"
+        >
+          新建
+        </button>
+        {sessions.length === 0 ? (
+          <span className="shrink-0 text-sm text-neutral-500">发送后自动保存会话</span>
+        ) : (
+          sessions.slice(0, 8).map((session) => (
+            <button
+              className={`h-9 max-w-44 shrink-0 truncate rounded-md border px-3 text-sm ${
+                activeSessionId === session.id
+                  ? "border-emerald-300 bg-emerald-50 text-emerald-900"
+                  : "border-neutral-200 bg-neutral-50 text-neutral-700"
+              }`}
+              key={session.id}
+              onClick={() => onPickSession(session.id)}
+              type="button"
+            >
+              {session.title ?? "未命名会话"}
+            </button>
+          ))
+        )}
+      </div>
+    </div>
+  );
 }
 
 function Starter({
@@ -586,17 +656,20 @@ function Starter({
   onPickExample: (example: (typeof examples)[number]) => void;
 }) {
   return (
-    <div className="flex flex-1 flex-col justify-center gap-8 py-12">
+    <div className="flex flex-1 flex-col justify-center gap-7 py-8 sm:py-12">
       <div>
         <p className="text-sm font-semibold text-emerald-700">开始一个学习回合</p>
-        <h2 className="mt-3 max-w-2xl text-4xl font-semibold tracking-normal text-neutral-950">
+        <h2 className="mt-3 max-w-3xl text-3xl font-semibold tracking-normal text-neutral-950 sm:text-4xl">
           输入题目、上传图片，或直接生成函数图形来理解直觉
         </h2>
+        <p className="mt-3 max-w-2xl text-base leading-7 text-neutral-600">
+          选择解答粒度后提问；图片题会先进入可编辑确认区，不会自动发送。
+        </p>
       </div>
       <div className="grid gap-3 md:grid-cols-3">
         {examples.map((example) => (
           <button
-            className="rounded-lg border border-neutral-200 bg-white p-4 text-left shadow-sm transition hover:border-emerald-300 hover:shadow-md"
+            className="min-h-32 rounded-lg border border-neutral-200 bg-white p-4 text-left shadow-sm transition hover:border-emerald-300 hover:shadow-md"
             key={example.label}
             onClick={() => onPickExample(example)}
             type="button"
@@ -624,7 +697,7 @@ function MessageBubble({
   return (
     <article className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
       <div
-        className={`max-w-[88%] rounded-lg px-4 py-3 shadow-sm ${
+        className={`max-w-[94%] rounded-lg px-4 py-3 shadow-sm sm:max-w-[86%] ${
           isUser
             ? "bg-neutral-950 text-white"
             : "border border-neutral-200 bg-white text-neutral-900"
@@ -673,8 +746,9 @@ function PlotPanel({
 
   if (plotState.status === "loading") {
     return (
-      <div className="rounded-lg border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
-        正在生成图形...
+      <div className="rounded-lg border border-emerald-100 bg-emerald-50 px-4 py-4 text-sm text-emerald-900">
+        <span className="font-semibold">正在生成图形</span>
+        <span className="ml-2 text-emerald-800">稍后会在回答下方显示。</span>
       </div>
     );
   }
@@ -693,18 +767,25 @@ function PlotPanel({
 
   return (
     <div className="rounded-lg border border-emerald-200 bg-white p-4 shadow-sm">
-      <p className="text-sm font-semibold text-neutral-950">这道题适合配合图形理解</p>
-      <p className="mt-1 text-sm leading-6 text-neutral-600">
-        将生成 {getPlotTypeLabel(activePlotSuggestion.plot_type)}：
-        <span className="font-medium text-neutral-900">{activePlotSuggestion.expression}</span>
-      </p>
-      <button
-        className="mt-3 rounded-md bg-neutral-950 px-4 py-2 text-sm font-semibold text-white transition hover:bg-neutral-800"
-        onClick={() => onGeneratePlot(activePlotSuggestion)}
-        type="button"
-      >
-        生成图形
-      </button>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-neutral-950">这道题适合配合图形理解</p>
+          <p className="mt-1 text-sm leading-6 text-neutral-600">
+            将生成 {getPlotTypeLabel(activePlotSuggestion.plot_type)}
+            <span className="mx-1 text-neutral-300">·</span>
+            <span className="font-medium text-neutral-900">
+              {activePlotSuggestion.expression}
+            </span>
+          </p>
+        </div>
+        <button
+          className="h-10 shrink-0 rounded-md bg-neutral-950 px-4 text-sm font-semibold text-white transition hover:bg-neutral-800"
+          onClick={() => onGeneratePlot(activePlotSuggestion)}
+          type="button"
+        >
+          生成图形
+        </button>
+      </div>
     </div>
   );
 }
@@ -749,21 +830,27 @@ function Composer({
   onStop: () => void;
 }) {
   return (
-    <form className="border-t border-neutral-200 bg-white px-4 py-4 sm:px-6" onSubmit={onSubmit}>
-      <div className="mx-auto max-w-5xl">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+    <form
+      className="shrink-0 border-t border-neutral-200 bg-white px-4 py-3 shadow-[0_-10px_30px_rgba(15,23,42,0.04)] sm:px-6"
+      onSubmit={onSubmit}
+    >
+      <div className="mx-auto max-w-6xl">
+        <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
           <ModeSelector answerMode={answerMode} disabled={disabled} onChange={onAnswerModeChange} />
-          <div className="grid grid-cols-2 rounded-md border border-neutral-200 bg-neutral-50 p-1 text-sm">
+          <div
+            aria-label="输入方式"
+            className="grid w-full grid-cols-2 rounded-md border border-neutral-200 bg-neutral-50 p-1 text-sm sm:w-72"
+          >
             {(["text", "image"] as InputMode[]).map((mode) => (
               <button
-                className={`rounded px-3 py-1.5 font-semibold transition ${
+                className={`h-9 rounded px-3 font-semibold transition ${
                   inputMode === mode ? "bg-white text-neutral-950 shadow-sm" : "text-neutral-500"
                 }`}
                 key={mode}
                 onClick={() => onInputModeChange(mode)}
                 type="button"
               >
-                {mode === "text" ? "文本输入" : "图片识别"}
+                {inputModeLabels[mode]}
               </button>
             ))}
           </div>
@@ -813,7 +900,7 @@ function ModeSelector({
         const active = mode.value === answerMode;
         return (
           <button
-            className={`rounded-md border px-3 py-2 text-left transition disabled:cursor-not-allowed ${
+            className={`min-h-16 rounded-md border px-3 py-2 text-left transition disabled:cursor-not-allowed ${
               active
                 ? "border-emerald-700 bg-emerald-50 text-emerald-950"
                 : "border-neutral-200 bg-white text-neutral-700 hover:border-neutral-300"
@@ -876,7 +963,7 @@ function OCRComposer({
   onTextChange: (value: string) => void;
 }) {
   return (
-    <div className="mt-3 grid gap-3 lg:grid-cols-[240px_minmax(0,1fr)_128px]">
+    <div className="mt-3 grid gap-3 lg:grid-cols-[240px_minmax(0,1fr)_140px]">
       <label className="flex min-h-36 cursor-pointer flex-col items-center justify-center rounded-md border border-dashed border-neutral-300 bg-neutral-50 px-4 py-4 text-center text-sm text-neutral-600 transition hover:border-emerald-300 hover:bg-emerald-50">
         <input
           accept="image/png,image/jpeg,image/webp,image/gif"
@@ -885,11 +972,11 @@ function OCRComposer({
           onChange={(event) => onImagePick(event.target.files?.[0] ?? null)}
           type="file"
         />
-        上传题目图片
+        <span className="font-semibold text-neutral-800">上传题目图片</span>
         <span className="mt-1 text-xs text-neutral-500">PNG / JPG / WEBP</span>
       </label>
 
-      <div className="rounded-md border border-neutral-200 bg-white p-3">
+      <div className="min-h-36 rounded-md border border-neutral-200 bg-white p-3">
         {ocrState.status === "idle" ? (
           <p className="text-sm leading-6 text-neutral-500">
             图片识别结果会先显示在这里，你可以修改后再发送给 Agent。
