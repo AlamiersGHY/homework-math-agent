@@ -84,5 +84,6 @@ Current scaffold implements:
 - `GET /health`
 - `POST /chat/stream` SSE endpoint with OpenAI-compatible LLM provider support and mock fallback
 - `POST /ocr/recognize` with mock fallback and Doubao Vision provider support
+- `POST /plots/preview` for Plotly-style `function2d` and `surface3d` previews
 - `GET /sessions`
 - `GET /sessions/{session_id}`

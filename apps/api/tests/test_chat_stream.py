@@ -38,6 +38,23 @@ def test_chat_stream_returns_sse_events() -> None:
     assert '"question_type": "computational"' in body
 
 
+def test_chat_stream_includes_plot_suggestion_for_visualization_question() -> None:
+    client = TestClient(app)
+
+    with client.stream(
+        "POST",
+        "/chat/stream",
+        json={"message": "画一下 z = sin(x*y) 的三维曲面", "answer_mode": "direct"},
+    ) as response:
+        body = response.read().decode("utf-8")
+
+    assert response.status_code == 200
+    assert '"question_type": "visualization"' in body
+    assert '"should_visualize": true' in body
+    assert '"plot_type": "surface3d"' in body
+    assert '"expression": "sin(x*y)"' in body
+
+
 def test_chat_stream_falls_back_to_mock_without_api_key(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("LLM_PROVIDER", "openai_compatible")
     monkeypatch.setenv("LLM_BASE_URL", "https://api.deepseek.com")

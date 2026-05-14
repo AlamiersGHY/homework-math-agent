@@ -129,3 +129,10 @@
 - Added OCR schema, service, provider boundary, mock provider, Doubao Vision provider path, and future Mathpix adapter path.
 - Added OCR configuration placeholders to `.env.example` and documented Doubao credential setup in the API README.
 - Verified backend pytest with OCR API, validation, mock fallback, and Doubao provider selection coverage.
+
+## Plot Backend Slice
+
+- Added `POST /plots/preview` for Plotly-style `function2d` and `surface3d` specs.
+- Added safe MVP expression evaluation for bounded math functions, variables, and finite ranges.
+- Added chat metadata plot suggestions for simple visualization-oriented questions.
+- Verified backend pytest with 2D plot, 3D surface, invalid expression, invalid range, and chat plot-suggestion coverage.

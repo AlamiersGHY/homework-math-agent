@@ -93,11 +93,13 @@ Turn the current chat-only slice into a cohesive local MVP demo with chat, answe
 - Backend now has lightweight SQLite session/message/artifact persistence and session read APIs.
 - Chat stream now records user and assistant messages when a session is active.
 - Backend now has `POST /ocr/recognize` with service/provider boundaries, mock OCR fallback, Doubao Vision provider support, and Mathpix adapter placeholder support.
+- Backend now has `POST /plots/preview` for Plotly-style `function2d` and `surface3d` specs.
+- Chat metadata now includes a bounded plot suggestion for visualization-oriented questions.
 
 ## Next Tasks
 
 - Add the frontend OCR upload, preview, editable recognition, and confirm-to-chat flow.
-- Implement `POST /plots/preview` for Plotly-style `function2d` and `surface3d` specs, then connect the frontend Plot viewer.
+- Add the frontend Plot viewer and connect chat visualization suggestions to `/plots/preview`.
 - Refactor the frontend workspace into chat, OCR, plots, and session surfaces without showing backend debug metadata as normal UI.
 - Connect OCR confirmation and visualization suggestions into the chat loop.
 - Add project-level wrapper scripts and a minimal eval runner for current deterministic behavior.

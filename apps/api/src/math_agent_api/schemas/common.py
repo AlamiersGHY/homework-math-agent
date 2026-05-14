@@ -18,6 +18,12 @@ class QuestionType(StrEnum):
     UNKNOWN = "unknown"
 
 
+class PlotType(StrEnum):
+    FUNCTION2D = "function2d"
+    SURFACE3D = "surface3d"
+    REGION2D = "region2d"
+
+
 class ErrorBody(BaseModel):
     code: str
     message: str

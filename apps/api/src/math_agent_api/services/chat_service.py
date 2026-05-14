@@ -42,6 +42,41 @@ def should_visualize(question_type: QuestionType) -> bool:
     return question_type == QuestionType.VISUALIZATION
 
 
+def create_plot_suggestion(message: str, question_type: QuestionType) -> dict | None:
+    if not should_visualize(question_type):
+        return None
+
+    normalized = message.replace(" ", "").lower()
+    expression = _extract_expression_after_equals(message)
+    if "z=" in normalized or ("x" in normalized and "y" in normalized):
+        return {
+            "plot_type": "surface3d",
+            "expression": expression or "sin(x*y)",
+            "variables": ["x", "y"],
+            "ranges": {"x": [-3, 3], "y": [-3, 3]},
+            "source": "agent",
+        }
+
+    return {
+        "plot_type": "function2d",
+        "expression": expression or "sin(x)/x",
+        "variables": ["x"],
+        "ranges": {"x": [-6, 6]},
+        "source": "agent",
+    }
+
+
+def _extract_expression_after_equals(message: str) -> str | None:
+    for marker in ["z =", "z=", "f(x)=", "y = ", "y="]:
+        if marker in message:
+            candidate = message.split(marker, 1)[1]
+            candidate = candidate.replace("的三维曲面", "").replace("的图像", "")
+            candidate = candidate.replace("三维曲面", "").replace("图像", "")
+            candidate = candidate.replace("，", " ").replace(",", " ").strip()
+            return candidate.split()[0] if candidate else None
+    return None
+
+
 async def stream_mock_chat(request: ChatStreamRequest) -> AsyncIterator[str]:
     session_id = request.session_id or create_session_id()
     question_type = classify_question(request.confirmed_ocr_text or request.message)
@@ -97,6 +132,7 @@ async def stream_chat_error(
     question_type: QuestionType,
     provider_name: str,
 ) -> AsyncIterator[str]:
+    active_message = request.confirmed_ocr_text or request.message
     yield format_sse(
         "start",
         StartEvent(session_id=session_id, answer_mode=request.answer_mode).model_dump(mode="json"),
@@ -106,7 +142,7 @@ async def stream_chat_error(
         MetadataEvent(
             question_type=question_type,
             should_visualize=should_visualize(question_type),
-            plot_suggestion=None,
+            plot_suggestion=create_plot_suggestion(active_message, question_type),
         ).model_dump(mode="json"),
     )
     async for event in stream_chat_error_tail(provider_name):
@@ -154,7 +190,7 @@ async def stream_chat_with_provider(
         MetadataEvent(
             question_type=question_type,
             should_visualize=should_visualize(question_type),
-            plot_suggestion=None,
+            plot_suggestion=create_plot_suggestion(active_message, question_type),
         ).model_dump(mode="json"),
     )
 
