@@ -17,6 +17,26 @@ $env:PYTHONPATH = "src"
 .\.venv\Scripts\python -m uvicorn math_agent_api.main:app --reload
 ```
 
+## LLM Provider
+
+Copy `.env.example` to `.env` and fill the key locally:
+
+```powershell
+Copy-Item .env.example .env
+```
+
+Default first real provider target:
+
+```env
+LLM_PROVIDER=openai_compatible
+LLM_BASE_URL=https://api.deepseek.com
+LLM_MODEL=deepseek-v4-flash
+LLM_API_KEY=your_api_key_here
+LLM_MOCK_FALLBACK=true
+```
+
+`.env` is ignored by Git. If `LLM_API_KEY` is empty and `LLM_MOCK_FALLBACK=true`, `/chat/stream` keeps using the local mock stream.
+
 ## Test
 
 ```powershell
@@ -26,4 +46,4 @@ $env:PYTHONPATH = "src"
 Current scaffold implements:
 
 - `GET /health`
-- mock `POST /chat/stream` SSE endpoint
+- `POST /chat/stream` SSE endpoint with OpenAI-compatible LLM provider support and mock fallback

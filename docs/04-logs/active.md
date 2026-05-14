@@ -2,11 +2,11 @@
 
 ## Current Phase
 
-Phase 1 first chat slice.
+Phase 1 real LLM integration.
 
 ## Current Goal
 
-Move from the mock SSE chat UI slice toward real LLM provider integration.
+Verify the real LLM provider slice with a local API key, then tune the first answer behavior and continue toward OCR/Plot skeletons.
 
 ## Relevant Docs
 
@@ -44,6 +44,12 @@ Move from the mock SSE chat UI slice toward real LLM provider integration.
 - `apps/api/README.md`
 - `apps/api/requirements.txt`
 - `apps/api/requirements-dev.txt`
+- `apps/api/.env.example`
+- `apps/api/src/math_agent_api/core/config.py`
+- `apps/api/src/math_agent_api/providers/llm.py`
+- `apps/api/src/math_agent_api/prompts/chat.py`
+- `apps/api/src/math_agent_api/services/chat_service.py`
+- `apps/api/tests/test_chat_stream.py`
 - `docs/04-logs/tech-debt-tracker.md`
 - `scripts/README.md`
 
@@ -62,19 +68,21 @@ Move from the mock SSE chat UI slice toward real LLM provider integration.
 - Fuzzy requirement planning now has a routed workflow and ADR.
 - Complete deliverable units now require an automatic local Git checkpoint when safe.
 - First web chat UI slice is implemented with answer mode switching, mock SSE streaming, API status, and metadata display.
+- Backend chat now has a configurable OpenAI-compatible LLM provider path with mock fallback.
+- `apps/api/.env.example` documents the first DeepSeek-oriented local configuration.
+- Chat SSE tests cover mock fallback, provider chunk mapping, and provider error mapping.
 
 ## Next Tasks
 
-- Connect a real LLM provider behind the existing chat service/provider boundary.
-- Preserve the current `POST /chat/stream` contract while replacing mock answer generation.
-- Add or update eval cases for answer mode behavior once real LLM output is introduced.
+- Add a local `apps/api/.env` with a real `LLM_API_KEY` and run a live DeepSeek smoke test.
+- Tune prompt wording after reviewing the first real model outputs for direct/guided/hint modes.
 - Add project-level wrapper scripts for common `dev`, `test`, and `check` workflows.
 - Start connecting eval cases to an executable runner after the first chat slice exists.
 - Add OCR and plot endpoint skeletons when their first UI flows are ready.
 
 ## Blockers
 
-- None.
+- Live DeepSeek verification requires a local API key in `apps/api/.env`.
 
 ## Exit Checklist
 

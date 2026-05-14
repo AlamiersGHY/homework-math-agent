@@ -78,3 +78,14 @@
 - Added a native `fetch` stream SSE parser for `start`, `metadata`, `delta`, `error`, and `done` events.
 - Connected the UI to the backend mock chat stream and displayed question type, visualization suggestion, session id, and streaming state.
 - Verified backend pytest, frontend typecheck, frontend build, direct SSE event shape, and Chrome headless layout rendering.
+
+## Real LLM Provider Integration
+
+- Added backend settings loading for local `.env` configuration.
+- Added an OpenAI-compatible LLM provider boundary for DeepSeek or compatible proxy providers.
+- Added a mock LLM fallback when no API key is configured.
+- Rewired `POST /chat/stream` so the route contract remains SSE while the service streams provider chunks as `delta` events.
+- Added first chat prompt construction for direct, guided, and hint answer modes.
+- Added `.env.example` and API README instructions for local DeepSeek configuration.
+- Updated agent eval cases to guard against leaking provider plumbing into the learning conversation.
+- Verified backend pytest for health, SSE event shape, mock fallback, provider chunk mapping, and provider error mapping.

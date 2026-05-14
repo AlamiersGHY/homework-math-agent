@@ -1,8 +1,14 @@
-import asyncio
 import json
 from collections.abc import AsyncIterator
 from uuid import uuid4
 
+from math_agent_api.prompts.chat import build_chat_messages
+from math_agent_api.providers.llm import (
+    LLMProvider,
+    LLMProviderError,
+    MockLLMProvider,
+    get_llm_provider,
+)
 from math_agent_api.schemas.chat import (
     ChatStreamRequest,
     DeltaEvent,
@@ -10,7 +16,7 @@ from math_agent_api.schemas.chat import (
     MetadataEvent,
     StartEvent,
 )
-from math_agent_api.schemas.common import QuestionType
+from math_agent_api.schemas.common import ErrorBody, QuestionType
 
 
 def format_sse(event: str, data: dict) -> str:
@@ -35,19 +41,83 @@ def should_visualize(question_type: QuestionType) -> bool:
     return question_type == QuestionType.VISUALIZATION
 
 
-def mock_answer_text(request: ChatStreamRequest, question_type: QuestionType) -> str:
-    source = request.confirmed_ocr_text or request.message
-    if request.answer_mode == "direct":
-        return f"这是 mock 直接回答：已收到问题「{source}」。后续会接入真实 LLM provider。"
-    if request.answer_mode == "hint":
-        return f"这是 mock 提示：先判断题型为 {question_type.value}，再找最关键的下一步。"
-    return f"这是 mock 分步引导：我会先确认题型为 {question_type.value}，再给出下一步提示。"
-
-
 async def stream_mock_chat(request: ChatStreamRequest) -> AsyncIterator[str]:
     session_id = request.session_id or f"session-{uuid4()}"
     question_type = classify_question(request.confirmed_ocr_text or request.message)
 
+    async for event in stream_chat_with_provider(
+        request=request,
+        session_id=session_id,
+        question_type=question_type,
+        provider=MockLLMProvider(),
+    ):
+        yield event
+
+
+async def stream_chat(request: ChatStreamRequest) -> AsyncIterator[str]:
+    session_id = request.session_id or f"session-{uuid4()}"
+    question_type = classify_question(request.confirmed_ocr_text or request.message)
+    try:
+        provider = get_llm_provider()
+    except LLMProviderError:
+        async for event in stream_chat_error(
+            request=request,
+            session_id=session_id,
+            question_type=question_type,
+            provider_name="unconfigured",
+        ):
+            yield event
+        return
+
+    async for event in stream_chat_with_provider(
+        request=request,
+        session_id=session_id,
+        question_type=question_type,
+        provider=provider,
+    ):
+        yield event
+
+
+async def stream_chat_error(
+    request: ChatStreamRequest,
+    session_id: str,
+    question_type: QuestionType,
+    provider_name: str,
+) -> AsyncIterator[str]:
+    yield format_sse(
+        "start",
+        StartEvent(session_id=session_id, answer_mode=request.answer_mode).model_dump(mode="json"),
+    )
+    yield format_sse(
+        "metadata",
+        MetadataEvent(
+            question_type=question_type,
+            should_visualize=should_visualize(question_type),
+            plot_suggestion=None,
+        ).model_dump(mode="json"),
+    )
+    async for event in stream_chat_error_tail(provider_name):
+        yield event
+
+
+async def stream_chat_error_tail(provider_name: str) -> AsyncIterator[str]:
+    yield format_sse(
+        "error",
+        ErrorBody(
+            code="llm_provider_error",
+            message="LLM provider failed. Check backend provider configuration or API availability.",
+            details={"provider": provider_name},
+        ).model_dump(mode="json"),
+    )
+    yield format_sse("done", DoneEvent(finish_reason="error").model_dump(mode="json"))
+
+
+async def stream_chat_with_provider(
+    request: ChatStreamRequest,
+    session_id: str,
+    question_type: QuestionType,
+    provider: LLMProvider,
+) -> AsyncIterator[str]:
     yield format_sse(
         "start",
         StartEvent(session_id=session_id, answer_mode=request.answer_mode).model_dump(mode="json"),
@@ -62,8 +132,11 @@ async def stream_mock_chat(request: ChatStreamRequest) -> AsyncIterator[str]:
         ).model_dump(mode="json"),
     )
 
-    for chunk in mock_answer_text(request, question_type).split("，"):
-        await asyncio.sleep(0)
-        yield format_sse("delta", DeltaEvent(text=chunk).model_dump(mode="json"))
-
-    yield format_sse("done", DoneEvent().model_dump(mode="json"))
+    try:
+        messages = build_chat_messages(request, question_type)
+        async for chunk in provider.stream_chat(messages):
+            yield format_sse("delta", DeltaEvent(text=chunk).model_dump(mode="json"))
+        yield format_sse("done", DoneEvent().model_dump(mode="json"))
+    except LLMProviderError:
+        async for event in stream_chat_error_tail(getattr(provider, "name", "unknown")):
+            yield event

@@ -9,6 +9,7 @@ This file tracks known deferred work and risks. Items here are not current MVP b
 | TD-003 | Apps | `apps/web` and `apps/api` were placeholders and not runnable yet. | Resolved by the initial Next.js and FastAPI scaffold. | Keep app-level READMEs current as commands evolve. | Phase 1 | closed |
 | TD-004 | README | Root README described the project as foundation-stage before scaffold. | Resolved by the scaffold status refresh. | Keep README synchronized at milestone boundaries. | Phase 1 | closed |
 | TD-005 | Dependencies | `npm audit --omit=dev` reports 2 moderate findings through Next/PostCSS after initial install. | Should be reviewed before public demo or deployment; current scaffold is still runnable. | Do not force downgrade Next during scaffold; revisit during release check or dependency update. | Phase 1 | open |
+| TD-006 | Provider | Real DeepSeek live smoke has not run because no local API key is configured yet. | Code path is tested with mock/fake providers, but real provider auth/network behavior is not verified locally. | Add `apps/api/.env` with a real key and run `/chat/stream` live smoke before prompt tuning. | Phase 1 | open |
 
 ## Status Values
 

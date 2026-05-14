@@ -176,5 +176,27 @@
       "expand scope into a learning path system"
     ],
     "notes": "The product is not a full personalized learning path engine."
+  },
+  {
+    "id": "agent-009",
+    "title": "Real LLM output should not expose provider plumbing",
+    "input": {
+      "message": "求 lim(x->0) sin(x)/x",
+      "answer_mode": "direct"
+    },
+    "expected": {
+      "question_type": "computational",
+      "answer_mode": "direct",
+      "should_visualize": false
+    },
+    "must": [
+      "answer the math question directly",
+      "respect the selected answer mode"
+    ],
+    "must_not": [
+      "mention mock provider when a real provider is configured",
+      "expose API key, base URL, or provider implementation details"
+    ],
+    "notes": "Provider integration should improve the answer without leaking backend plumbing into the learning conversation."
   }
 ]
