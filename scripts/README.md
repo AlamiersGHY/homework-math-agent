@@ -22,16 +22,18 @@ Project-level scripts now wrap the app-local commands through these stable entry
 
 | Command | Purpose |
 | --- | --- |
+| `.\scripts\dev.ps1` | Start the API and web app together for local development. |
 | `.\scripts\test.ps1` | Run deterministic backend pytest coverage. |
 | `.\scripts\eval.ps1` | Run deterministic Agent and visualization evals from `evals/`. |
 | `.\scripts\check.ps1` | Run backend tests, evals, frontend typecheck, and frontend build sequentially. |
+| `.\scripts\browser-qa.ps1` | Run production-build desktop/mobile Playwright QA against mock API/OCR. |
+| `.\scripts\release-check.ps1` | Run full local release validation: `check`, mock API smoke, browser QA, and dependency audit advisory. |
 
 Still planned:
 
 | Command | Purpose |
 | --- | --- |
-| `dev` | Start frontend and backend together for local development. |
-| `release-check` | Run MVP release checks before deployment or demo, including browser QA and provider smoke checks. |
+| Live OCR smoke | Exercise Doubao Vision once `DOUBAO_API_KEY` and `DOUBAO_VISION_MODEL` are configured locally. |
 
 ## Rules
 
@@ -40,7 +42,11 @@ Still planned:
 - Scripts should not encode product or architecture decisions that are absent from `docs/`.
 - When a script becomes the official way to verify work, update `docs/02-workflow/testing-strategy.md`.
 - `check.ps1` intentionally clears `apps/web/.next` before typecheck and runs the Next checks sequentially to avoid generated-type races.
+- `browser-qa.ps1` rebuilds the frontend with the QA API base URL before starting `next start`; this avoids stale `NEXT_PUBLIC_API_BASE_URL` bundles.
+- `release-check.ps1` treats `npm audit --omit=dev` findings as advisory by default because TD-005 is tracked; pass `-StrictAudit` to fail on audit findings.
+- `release-check.ps1 -LiveLLM` also runs the real OpenAI-compatible LLM smoke when local credentials are configured.
+- `smoke_api.py` forces mock LLM/OCR providers and uses a temporary SQLite file so release smoke does not depend on external keys.
 
 ## Current Status
 
-The first runnable project-level wrappers exist for `test`, `eval`, and `check`. Local development and release-check orchestration remain tracked in `docs/04-logs/tech-debt-tracker.md`.
+Runnable project-level wrappers exist for local dev, tests, evals, checks, browser QA, and release validation. Live Doubao OCR smoke still requires separate execution after credentials are added.

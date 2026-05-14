@@ -1,61 +1,100 @@
 # Math Agent
 
-## 中文
+Math Agent is a local MVP demo for a mathematical analysis learning assistant. The current product is no longer just a scaffold: it provides a usable learning workspace with streaming chat, answer-mode control, local session history, OCR confirmation, and Plotly-based visualization.
 
-Math Agent 是一个面向数学分析学习场景的实验性 AI Coding 项目。目标是在较短周期内构建一个可交付的数学学习助手，同时探索轻量 SDD / Harness 风格的 AI Coding 工作流。
+## Current MVP
 
-当前项目已经完成 SDD 基座和第一版可运行工程骨架：
+- `apps/web`: Next.js + TypeScript + Tailwind learning workspace.
+- `apps/api`: FastAPI + Pydantic backend with thin routers and service/provider boundaries.
+- Streaming chat through `POST /chat/stream`.
+- Answer modes: direct answer, guided explanation, and hint-only.
+- Local SQLite-backed sessions through `GET /sessions` and `GET /sessions/{session_id}`.
+- OCR upload flow through `POST /ocr/recognize`; mock is test-safe, Doubao Vision is the preferred live MVP provider, Mathpix is reserved for a future adapter.
+- Plot preview through `POST /plots/preview` for `function2d`, `surface3d`, and bounded `region2d` specs rendered by Plotly in the frontend.
+- Deterministic evals for classification and visualization behavior.
 
-- `apps/web`: Next.js + TypeScript + Tailwind 前端骨架。
-- `apps/api`: FastAPI + Pydantic 后端骨架。
-- `GET /health`: 已实现并通过测试。
-- `POST /chat/stream`: 已实现 mock SSE 流式接口。
-- `evals/`: 已有首批 Agent 行为和可视化触发样例。
-- 本地 Git 仓库已初始化，暂未连接 GitHub 远程。
+Out of current MVP scope: RAG, LangGraph/runtime multi-agent orchestration, login/accounts, cross-device sync, and professional implicit-surface modeling.
 
-### 项目目标
+## Quick Start
 
-- 构建一个面向工科本科生的数学分析学习助手。
-- 支持直接解答、分步引导、仅提示、概念讲解、计算辅助、证明辅助等学习场景。
-- 逐步接入 OCR、LaTeX 渲染、函数或积分区域可视化、轻量课程资料检索等能力。
-- 用轻量 SDD 文档、eval cases 和自动化脚本减少开发过程中的人工介入。
-
-### 本地运行
-
-后端：
+Install backend dependencies:
 
 ```powershell
 cd apps/api
-py -3.12 -m venv .venv
+py -3 -m venv .venv
 .\.venv\Scripts\python -m pip install --upgrade pip
 .\.venv\Scripts\python -m pip install -r requirements-dev.txt
-$env:PYTHONPATH = "src"
-.\.venv\Scripts\python -m uvicorn math_agent_api.main:app --reload
 ```
 
-后端测试：
-
-```powershell
-cd apps/api
-.\.venv\Scripts\python -m pytest
-```
-
-前端：
+Install frontend dependencies:
 
 ```powershell
 cd apps/web
 npm install
-npm run dev
 ```
 
-前端构建：
+Start the local demo from the repository root:
 
 ```powershell
-cd apps/web
-npm run build
+.\scripts\dev.ps1
 ```
 
-### 目录结构
+Default URLs:
+
+- API: `http://127.0.0.1:8000`
+- Web: `http://127.0.0.1:3000`
+
+## Configuration
+
+Copy `apps/api/.env.example` to `apps/api/.env` for local provider configuration. `.env` files are ignored by Git.
+
+For mock-safe local development:
+
+```env
+LLM_PROVIDER=mock
+OCR_PROVIDER=mock
+DATABASE_URL=sqlite:///math_agent.db
+```
+
+For the current real LLM path, use the OpenAI-compatible settings documented in `apps/api/.env.example`. Live OCR requires:
+
+```env
+OCR_PROVIDER=doubao_vision
+DOUBAO_API_KEY=your_volcengine_ark_api_key
+DOUBAO_VISION_MODEL=your_vision_model_or_endpoint_id
+```
+
+Do not commit real API keys or paste them into SDD logs.
+
+## Verification
+
+From the repository root:
+
+```powershell
+.\scripts\test.ps1
+.\scripts\eval.ps1
+.\scripts\check.ps1
+.\scripts\browser-qa.ps1
+.\scripts\release-check.ps1
+```
+
+What they cover:
+
+- `test.ps1`: backend pytest.
+- `eval.ps1`: deterministic agent/visualization eval runner.
+- `check.ps1`: backend tests, evals, frontend typecheck, and frontend build.
+- `browser-qa.ps1`: production-build browser QA against mock API/OCR for desktop and mobile.
+- `release-check.ps1`: full check, mock API smoke, browser QA, and frontend dependency audit advisory.
+
+The release check intentionally treats the current `npm audit --omit=dev` moderate findings as advisory unless `-StrictAudit` is passed; the risk is tracked in `docs/04-logs/tech-debt-tracker.md`.
+
+When local real LLM credentials are configured, add `-LiveLLM`:
+
+```powershell
+.\scripts\release-check.ps1 -LiveLLM
+```
+
+## Project Structure
 
 ```text
 .
@@ -77,77 +116,25 @@ npm run build
 `-- tests/
 ```
 
-### 开发入口
-
-非平凡任务应先阅读：
-
-1. [AGENTS.md](AGENTS.md)
-2. [docs/INDEX.md](docs/INDEX.md)
-3. [docs/04-logs/active.md](docs/04-logs/active.md)
-
-正式产品范围、架构、API 契约、编码规范和测试策略以 `docs/` 中的 SDD 文档为准。根目录的 `product_requirments.md` 和 `tech-stack.md` 是早期规划草稿，不作为最终 source of truth。
-
-## English
-
-Math Agent is an experimental AI Coding project for mathematical analysis learning. The goal is to build a useful learning assistant in a short development cycle while exploring a lightweight SDD / Harness-style workflow for AI-assisted software development.
-
-The project now has a runnable scaffold:
-
-- `apps/web`: Next.js + TypeScript + Tailwind frontend scaffold.
-- `apps/api`: FastAPI + Pydantic backend scaffold.
-- `GET /health`: implemented and tested.
-- `POST /chat/stream`: mock SSE streaming endpoint implemented.
-- `evals/`: initial Agent behavior and visualization trigger cases.
-- Local Git repository initialized, with no GitHub remote connected yet.
-
-### Goals
-
-- Build a mathematical analysis learning assistant for undergraduate engineering students.
-- Support direct answers, guided hints, concept explanations, calculation assistance, and proof assistance.
-- Gradually add OCR, LaTeX rendering, function or integration-region visualization, and lightweight course-material retrieval.
-- Use lightweight SDD documents, eval cases, and automation scripts to reduce manual intervention during development.
-
-### Local Development
-
-Backend:
-
-```powershell
-cd apps/api
-py -3.12 -m venv .venv
-.\.venv\Scripts\python -m pip install --upgrade pip
-.\.venv\Scripts\python -m pip install -r requirements-dev.txt
-$env:PYTHONPATH = "src"
-.\.venv\Scripts\python -m uvicorn math_agent_api.main:app --reload
-```
-
-Backend tests:
-
-```powershell
-cd apps/api
-.\.venv\Scripts\python -m pytest
-```
-
-Frontend:
-
-```powershell
-cd apps/web
-npm install
-npm run dev
-```
-
-Frontend build:
-
-```powershell
-cd apps/web
-npm run build
-```
-
-### Development Workflow
+## SDD Workflow
 
 For non-trivial work, read:
 
-1. [AGENTS.md](AGENTS.md)
-2. [docs/INDEX.md](docs/INDEX.md)
-3. [docs/04-logs/active.md](docs/04-logs/active.md)
+1. `AGENTS.md`
+2. `docs/INDEX.md`
+3. `docs/04-logs/active.md`
 
-Product scope, architecture, API contracts, coding standards, and testing strategy should follow the SDD documents under `docs/`. The root-level `product_requirments.md` and `tech-stack.md` files are early planning drafts, not the final source of truth.
+Product scope, architecture, API contracts, coding standards, testing strategy, and current status live in `docs/`. Root-level early planning drafts are reference material only and are not the source of truth.
+
+## 中文说明
+
+Math Agent 当前是一个本地可演示 MVP：前端是数学分析学习工作台，后端提供流式对话、轻量会话历史、OCR 确认链路和 Plotly 图形预览。当前版本不做 RAG、不做登录账户、不引入 LangGraph 或运行时多 Agent 编排。
+
+常用入口：
+
+```powershell
+.\scripts\dev.ps1
+.\scripts\release-check.ps1
+```
+
+真实 LLM 和 Doubao OCR 的密钥只放在 `apps/api/.env`，不要提交到 Git。

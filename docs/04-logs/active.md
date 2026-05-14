@@ -61,6 +61,9 @@ Turn the current chat-only slice into a cohesive local MVP demo with chat, answe
 - `apps/api/tests/test_chat_stream.py`
 - `docs/04-logs/tech-debt-tracker.md`
 - `scripts/README.md`
+- `scripts/browser-qa.ps1`
+- `scripts/browser_qa.cjs`
+- `scripts/smoke_live_llm.py`
 
 ## In Progress
 
@@ -101,18 +104,21 @@ Turn the current chat-only slice into a cohesive local MVP demo with chat, answe
 - Complex implicit surfaces are now treated as out of MVP plotting scope instead of being forced into a `surface3d` suggestion.
 - Project-level wrappers now exist for backend tests, deterministic evals, and sequential full checks: `.\scripts\test.ps1`, `.\scripts\eval.ps1`, and `.\scripts\check.ps1`.
 - `scripts/run_evals.py` now scores deterministic eval expectations for classification, answer mode propagation, visualization triggers, plot types, and supported Plotly preview generation.
+- Project-level local dev and release-check wrappers now exist: `.\scripts\dev.ps1` and `.\scripts\release-check.ps1`.
+- Mock API release smoke now covers health, chat SSE, OCR mock recognition, 3D plot preview, region plot preview, and sessions through `scripts/smoke_api.py`.
+- Browser QA is now scriptable through `.\scripts\browser-qa.ps1`; it starts isolated mock API/Web processes, checks desktop and mobile viewports, and stores ignored screenshots under `.cache/qa/`. Latest production-build QA passed on 2026-05-15 00:01 +08 with screenshots under `.cache/qa/20260515-000134`.
+- `.\scripts\release-check.ps1` passed on 2026-05-15 00:01 +08: backend pytest, deterministic evals, frontend typecheck/build, mock API smoke, browser QA, and dependency audit advisory all completed.
+- Real OpenAI-compatible LLM smoke passed again on 2026-05-15 00:02 +08 with the local `.env` key: SSE emitted `start/metadata/delta/done` and no `error` event. The repeatable entry is `.\scripts\release-check.ps1 -LiveLLM`.
 
 ## Next Tasks
 
-- Add final `dev` and `release-check` orchestration once the demo smoke path is stable.
-- Run live LLM smoke with the user's configured key and live Doubao OCR smoke after the user adds Doubao credentials.
+- Run live Doubao OCR smoke after the user adds Doubao credentials.
 - Review real model outputs for prompt/LaTeX quality in direct/guided/hint modes.
-- Refresh demo/release README instructions so the current session/OCR/plot workspace is the documented entry path.
 - Keep running backend tests, frontend typecheck/build, API smoke checks, and browser verification for each completed unit.
 
 ## Blockers
 
-- Live LLM and live Doubao OCR smoke checks require local API keys in `apps/api/.env`.
+- Live Doubao OCR smoke checks require local API keys in `apps/api/.env`.
 - Doubao OCR live smoke additionally requires a vision-capable model or endpoint id in `DOUBAO_VISION_MODEL`.
 - Mathpix is not the active OCR provider because the user does not accept its current setup/billing requirement for this MVP; keep it as a future adapter path only.
 - `npm audit` still reports 2 moderate findings through the current Next/PostCSS dependency chain; do not run `npm audit fix --force` without a release dependency review.
@@ -128,4 +134,5 @@ Turn the current chat-only slice into a cohesive local MVP demo with chat, answe
 - Session persistence must remain local/lightweight and must not introduce accounts, login, permissions, or cross-device sync.
 - User-facing UI should show learning state and next actions, not raw provider/session/debug internals.
 - Before finalizing a coding task, run the relevant app-local tests or explain what could not be verified.
+- Release validation should use `.\scripts\release-check.ps1`; pass `-LiveLLM` only when real LLM credentials are locally configured.
 - After completing a coherent deliverable unit, create a local Git checkpoint commit unless blocked by unrelated changes or explicit user instruction.

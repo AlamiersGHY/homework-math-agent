@@ -151,3 +151,12 @@
 - Added a deterministic eval runner for current classification, answer mode, visualization trigger, plot-type, and Plotly preview behavior.
 - Closed the eval-runner tech debt and resolved the known Next typecheck/build race through sequential `check` orchestration.
 - Extended the bounded plotting slice so simple triangular `region2d` integration regions are supported and complex implicit surfaces are not forced into MVP plot suggestions.
+
+## Release Automation And Provider Smoke
+
+- Added local dev orchestration and release-check wrappers.
+- Added mock API smoke coverage for health, chat SSE, OCR, plot preview, region preview, and sessions.
+- Added browser QA automation for production-build desktop/mobile demo checks.
+- Added a repeatable optional live OpenAI-compatible LLM smoke path through `release-check.ps1 -LiveLLM`.
+- Verified the release path on 2026-05-15 00:01 +08 with `.\scripts\release-check.ps1`: backend pytest, evals, frontend typecheck/build, mock API smoke, browser QA, and dependency audit advisory completed.
+- Verified the local real OpenAI-compatible LLM path with the user's configured `.env` key; the latest smoke passed on 2026-05-15 00:02 +08 with SSE `start/metadata/delta/done` and no `error` event.

@@ -14,6 +14,14 @@ npm install
 npm run dev
 ```
 
+From the repository root, the preferred local demo entry is:
+
+```powershell
+.\scripts\dev.ps1
+```
+
+It starts the FastAPI backend and the Next.js frontend together and points the web app at the local API.
+
 ## Build
 
 ```powershell
@@ -29,12 +37,19 @@ Current frontend provides:
 - SQLite-backed session history through the backend session APIs.
 - OCR image upload with editable recognition confirmation before chat.
 - Plotly-backed plot preview rendering for chat visualization suggestions.
+  - Supported demo plots include 2D functions, simple 3D `z=f(x,y)` surfaces, and bounded 2D regions supplied by the backend.
 
 ## Browser QA
 
-The current workspace has been checked with Playwright against a mock backend on:
+Run browser QA from the repository root:
+
+```powershell
+.\scripts\browser-qa.ps1
+```
+
+The workspace is checked with Playwright against a mock backend on:
 
 - Desktop viewport: `1440x1000`
 - Mobile viewport: `390x844`
 
-The checked paths cover initial workspace layout, chat streaming, visualization suggestion to Plotly render, and OCR mock recognition to confirmed chat input.
+The checked paths cover initial workspace layout, chat streaming, visualization suggestion to Plotly render, OCR mock recognition to confirmed chat input, and mobile input-mode switching. Screenshots are written under `.cache/qa/` and are ignored by Git.

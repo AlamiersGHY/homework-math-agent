@@ -35,6 +35,20 @@
 - 前端类型检查或构建。
 - 关键页面浏览器检查。
 
+当前可重复命令：
+
+```powershell
+.\scripts\release-check.ps1
+```
+
+如本地 `.env` 已配置真实 OpenAI-compatible LLM，可追加：
+
+```powershell
+.\scripts\release-check.ps1 -LiveLLM
+```
+
+Doubao OCR live smoke 仍需真实 `DOUBAO_API_KEY` 和 `DOUBAO_VISION_MODEL`，没有凭据时不得把 live OCR 视为已通过。
+
 如果某项暂时无法运行，应记录为发布风险，而不是默认为通过。
 
 ## 配置检查

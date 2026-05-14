@@ -85,6 +85,15 @@ Evals 存放在 `evals/`，不替代 unit/API tests。
 - 改前端 UI：运行类型检查/构建；重要界面做浏览器检查。
 - 改依赖或目录结构：检查相关 docs 和 ADR。
 
+当前项目级入口：
+
+- `.\scripts\test.ps1`：后端 pytest。
+- `.\scripts\eval.ps1`：确定性 Agent / 可视化 eval。
+- `.\scripts\check.ps1`：后端测试、eval、前端 typecheck 和 build。
+- `.\scripts\browser-qa.ps1`：生产构建下的桌面 / 移动端浏览器 QA，默认使用 mock LLM/OCR 和临时 SQLite。
+- `.\scripts\release-check.ps1`：完整本地交付检查，包含 `check`、mock API smoke、浏览器 QA 和依赖审计提示。
+- `.\scripts\release-check.ps1 -LiveLLM`：在本地真实 LLM 配置存在时额外运行 OpenAI-compatible provider smoke。
+
 如果测试命令尚不存在，Agent 应说明“测试基础设施尚未建立”，并记录下一步应补的脚本或测试。
 
 ## 最小验收样例

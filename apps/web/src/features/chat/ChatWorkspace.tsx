@@ -859,7 +859,7 @@ function Composer({
         {inputMode === "text" ? (
           <div className="mt-3 flex flex-col gap-3 sm:flex-row">
             <textarea
-              className="min-h-24 flex-1 resize-none rounded-md border border-neutral-300 bg-white px-4 py-3 text-base leading-6 text-neutral-950 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100 disabled:bg-neutral-100"
+              className="min-h-20 flex-1 resize-none rounded-md border border-neutral-300 bg-white px-4 py-3 text-base leading-6 text-neutral-950 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100 disabled:bg-neutral-100 sm:min-h-24"
               disabled={disabled}
               onChange={(event) => onInputChange(event.target.value)}
               placeholder="输入数学分析问题、证明思路或函数表达式"
@@ -895,12 +895,12 @@ function ModeSelector({
   onChange: (mode: AnswerMode) => void;
 }) {
   return (
-    <div className="grid gap-2 sm:grid-cols-3">
+    <div className="grid grid-cols-3 gap-2">
       {answerModes.map((mode) => {
         const active = mode.value === answerMode;
         return (
           <button
-            className={`min-h-16 rounded-md border px-3 py-2 text-left transition disabled:cursor-not-allowed ${
+            className={`min-h-12 rounded-md border px-2 py-2 text-center transition disabled:cursor-not-allowed sm:min-h-16 sm:px-3 sm:text-left ${
               active
                 ? "border-emerald-700 bg-emerald-50 text-emerald-950"
                 : "border-neutral-200 bg-white text-neutral-700 hover:border-neutral-300"
@@ -911,7 +911,7 @@ function ModeSelector({
             type="button"
           >
             <span className="block text-sm font-semibold">{mode.label}</span>
-            <span className="block text-xs text-neutral-500">{mode.description}</span>
+            <span className="hidden text-xs text-neutral-500 sm:block">{mode.description}</span>
           </button>
         );
       })}
@@ -964,7 +964,7 @@ function OCRComposer({
 }) {
   return (
     <div className="mt-3 grid gap-3 lg:grid-cols-[240px_minmax(0,1fr)_140px]">
-      <label className="flex min-h-36 cursor-pointer flex-col items-center justify-center rounded-md border border-dashed border-neutral-300 bg-neutral-50 px-4 py-4 text-center text-sm text-neutral-600 transition hover:border-emerald-300 hover:bg-emerald-50">
+      <label className="flex min-h-24 cursor-pointer flex-col items-center justify-center rounded-md border border-dashed border-neutral-300 bg-neutral-50 px-4 py-3 text-center text-sm text-neutral-600 transition hover:border-emerald-300 hover:bg-emerald-50 sm:min-h-36 sm:py-4">
         <input
           accept="image/png,image/jpeg,image/webp,image/gif"
           className="sr-only"
@@ -976,7 +976,7 @@ function OCRComposer({
         <span className="mt-1 text-xs text-neutral-500">PNG / JPG / WEBP</span>
       </label>
 
-      <div className="min-h-36 rounded-md border border-neutral-200 bg-white p-3">
+      <div className="min-h-24 rounded-md border border-neutral-200 bg-white p-3 sm:min-h-36">
         {ocrState.status === "idle" ? (
           <p className="text-sm leading-6 text-neutral-500">
             图片识别结果会先显示在这里，你可以修改后再发送给 Agent。
@@ -991,7 +991,7 @@ function OCRComposer({
         {ocrState.status === "ready" ? (
           <div className="space-y-2">
             <textarea
-              className="min-h-28 w-full resize-none rounded-md border border-neutral-300 px-3 py-2 text-sm leading-6 outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
+              className="min-h-20 w-full resize-none rounded-md border border-neutral-300 px-3 py-2 text-sm leading-6 outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100 sm:min-h-28"
               onChange={(event) => onTextChange(event.target.value)}
               value={ocrState.editableText}
             />

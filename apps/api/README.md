@@ -5,7 +5,7 @@ FastAPI backend for Math Agent.
 ## Local Setup
 
 ```powershell
-py -3.12 -m venv .venv
+py -3 -m venv .venv
 .\.venv\Scripts\python -m pip install --upgrade pip
 .\.venv\Scripts\python -m pip install -r requirements-dev.txt
 ```
@@ -84,6 +84,6 @@ Current scaffold implements:
 - `GET /health`
 - `POST /chat/stream` SSE endpoint with OpenAI-compatible LLM provider support and mock fallback
 - `POST /ocr/recognize` with mock fallback and Doubao Vision provider support
-- `POST /plots/preview` for Plotly-style `function2d` and `surface3d` previews
+- `POST /plots/preview` for Plotly-style `function2d`, `surface3d`, and bounded `region2d` previews
 - `GET /sessions`
 - `GET /sessions/{session_id}`

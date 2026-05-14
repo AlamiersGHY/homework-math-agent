@@ -106,7 +106,9 @@ def test_chat_stream_falls_back_to_mock_without_api_key(monkeypatch: pytest.Monk
         body = response.read().decode("utf-8")
 
     assert response.status_code == 200
-    assert "真实 LLM 尚未配置" in body
+    assert "\\lim" in body
+    assert "mock fallback" not in body
+    assert "真实 LLM 尚未配置" not in body
     assert "event: done" in body
 
 

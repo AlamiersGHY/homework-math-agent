@@ -31,13 +31,32 @@ class MockLLMProvider:
             (message["content"] for message in reversed(messages) if message.get("role") == "user"),
             "",
         )
-        chunks = [
-            "这是本地 mock 回答：",
-            "真实 LLM 尚未配置或当前启用了 mock fallback。 ",
-            f"我已收到问题「{user_message[:80]}」。",
-        ]
+        chunks = _build_mock_answer(user_message)
         for chunk in chunks:
             yield chunk
+
+
+def _build_mock_answer(user_message: str) -> list[str]:
+    normalized = user_message.lower().replace(" ", "")
+    if "sin(x*y)" in normalized or "z=sin" in normalized:
+        return [
+            "可以把这个问题看成观察曲面 ",
+            "$$z=\\sin(xy)$$",
+            " 在平面区域上的起伏。沿着 $xy$ 相同的方向，函数值会保持相近；当 $xy$ 穿过不同的正负区间时，曲面会在波峰和波谷之间切换。你可以先旋转图形，观察四个象限中颜色和高度的对称变化。",
+        ]
+
+    if "lim" in normalized and "sin" in normalized:
+        return [
+            "结论是 ",
+            "$$\\lim_{x\\to 0}\\frac{\\sin x}{x}=1.$$",
+            " 关键理由可以用夹逼定理理解：在 $x$ 接近 $0$ 时，$\\sin x$ 与 $x$ 的一阶变化量相同，所以二者的比值趋向于 $1$。",
+        ]
+
+    return [
+        "我先把题目整理成一个可操作的学习步骤：",
+        f"题目是“{user_message[:80]}”。",
+        " 先判断它属于概念、计算、证明还是可视化问题，再选择直接解答、分步引导或只给提示。你可以继续要求我展开关键步骤。",
+    ]
 
 
 @dataclass(frozen=True)
@@ -113,4 +132,3 @@ def get_llm_provider(settings: Settings | None = None) -> LLMProvider:
     raise LLMProviderError(
         "LLM provider is not configured. Set LLM_BASE_URL, LLM_MODEL, and LLM_API_KEY."
     )
-

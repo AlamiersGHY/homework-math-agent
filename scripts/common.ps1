@@ -46,5 +46,45 @@ function Invoke-LoggedCommand {
 
     Write-Host ""
     Write-Host "==> $Label"
+    $global:LASTEXITCODE = 0
     & $Command
+    $exitCode = $global:LASTEXITCODE
+    if ($null -ne $exitCode -and $exitCode -ne 0) {
+        throw "$Label failed with exit code $exitCode"
+    }
+}
+
+function Wait-HttpOk {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $Url,
+        [Parameter(Mandatory = $true)]
+        [string] $Label,
+        [int] $TimeoutSeconds = 45,
+        [scriptblock] $FailureCheck
+    )
+
+    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+    $lastError = $null
+
+    while ((Get-Date) -lt $deadline) {
+        if ($FailureCheck) {
+            & $FailureCheck
+        }
+
+        try {
+            $response = Invoke-WebRequest -Uri $Url -UseBasicParsing -TimeoutSec 2
+            if ($response.StatusCode -ge 200 -and $response.StatusCode -lt 400) {
+                return
+            }
+            $lastError = "HTTP $($response.StatusCode)"
+        }
+        catch {
+            $lastError = $_.Exception.Message
+        }
+
+        Start-Sleep -Milliseconds 750
+    }
+
+    throw "$Label did not become ready at $Url within $TimeoutSeconds seconds. Last error: $lastError"
 }
