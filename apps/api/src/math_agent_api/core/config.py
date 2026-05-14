@@ -43,6 +43,8 @@ def _get_float(name: str, default: float) -> float:
 @dataclass(frozen=True)
 class Settings:
     database_url: str
+    cors_allow_origins: list[str]
+    cors_allow_origin_regex: str
     llm_provider: str
     llm_base_url: str
     llm_model: str
@@ -76,6 +78,18 @@ class Settings:
 def get_settings() -> Settings:
     return Settings(
         database_url=_get_env("DATABASE_URL", f"sqlite:///{API_ROOT / 'math_agent.db'}"),
+        cors_allow_origins=[
+            origin.strip()
+            for origin in _get_env(
+                "CORS_ALLOW_ORIGINS",
+                "http://localhost:3000,http://127.0.0.1:3000,http://localhost:3001,http://127.0.0.1:3001,http://localhost:3002,http://127.0.0.1:3002",
+            ).split(",")
+            if origin.strip()
+        ],
+        cors_allow_origin_regex=_get_env(
+            "CORS_ALLOW_ORIGIN_REGEX",
+            r"https?://(localhost|127\.0\.0\.1):\d+",
+        ),
         llm_provider=_get_env("LLM_PROVIDER", "mock"),
         llm_base_url=_get_env("LLM_BASE_URL", ""),
         llm_model=_get_env("LLM_MODEL", ""),

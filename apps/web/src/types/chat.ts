@@ -7,6 +7,8 @@ export type QuestionType =
   | "visualization"
   | "unknown";
 
+export type PlotType = "function2d" | "surface3d" | "region2d";
+
 export type ChatRole = "user" | "assistant";
 
 export type ChatMessage = {
@@ -14,6 +16,7 @@ export type ChatMessage = {
   role: ChatRole;
   content: string;
   status?: "streaming" | "done" | "error";
+  plotSuggestion?: PlotPreviewRequest | null;
 };
 
 export type ChatStreamRequest = {
@@ -38,7 +41,7 @@ export type StartEventData = {
 export type MetadataEventData = {
   question_type: QuestionType;
   should_visualize: boolean;
-  plot_suggestion: Record<string, unknown> | null;
+  plot_suggestion: PlotPreviewRequest | null;
 };
 
 export type DeltaEventData = {
@@ -61,3 +64,60 @@ export type ChatStreamEvent =
   | { event: "delta"; data: DeltaEventData }
   | { event: "done"; data: DoneEventData }
   | { event: "error"; data: ErrorEventData };
+
+export type SessionSummary = {
+  id: string;
+  title: string | null;
+  default_answer_mode: AnswerMode | string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type StoredMessage = {
+  id: string;
+  role: ChatRole;
+  content: string;
+  answer_mode: AnswerMode | string | null;
+  question_type: QuestionType | string | null;
+  source: string | null;
+  created_at: string;
+};
+
+export type SessionDetail = {
+  session: SessionSummary;
+  messages: StoredMessage[];
+  artifacts: Array<{
+    id: string;
+    artifact_type: string;
+    payload: Record<string, unknown>;
+    message_id: string | null;
+    created_at: string;
+  }>;
+};
+
+export type OCRRecognizeResponse = {
+  recognized_text: string;
+  confidence: number | null;
+  provider: string;
+  warnings: string[];
+};
+
+export type PlotPreviewRequest = {
+  plot_type: PlotType;
+  expression: string;
+  variables: string[];
+  ranges: Record<string, [number, number]>;
+  source?: string;
+};
+
+export type PlotPreviewResponse = {
+  plot_type: PlotType;
+  renderer: "plotly";
+  spec: {
+    data?: unknown[];
+    layout?: Record<string, unknown>;
+    config?: Record<string, unknown>;
+    [key: string]: unknown;
+  };
+  explanation: string;
+};

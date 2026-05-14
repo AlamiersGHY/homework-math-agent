@@ -136,3 +136,11 @@
 - Added safe MVP expression evaluation for bounded math functions, variables, and finite ranges.
 - Added chat metadata plot suggestions for simple visualization-oriented questions.
 - Verified backend pytest with 2D plot, 3D surface, invalid expression, invalid range, and chat plot-suggestion coverage.
+
+## Frontend MVP Workspace Slice
+
+- Reworked the chat-only page into a learning workspace with a local session rail, central transcript, answer-mode controls, and text/image input modes.
+- Added frontend API helpers for session history, OCR recognition, and plot preview.
+- Added editable OCR confirmation before recognized text enters chat.
+- Added a Plotly viewer that renders backend Plotly-style specs without rederiving math in the UI.
+- Added desktop and mobile browser QA coverage for initial layout, chat streaming, plot rendering, and OCR-confirmed chat flow.
