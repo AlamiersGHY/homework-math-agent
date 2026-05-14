@@ -48,6 +48,31 @@ DATABASE_URL=sqlite:///math_agent.db
 
 This stores sessions, messages, and future OCR/plot artifacts in `apps/api/math_agent.db`. The database file is ignored by Git.
 
+## OCR Provider
+
+OCR is mock-first for local tests and can be switched to Doubao Vision after credentials are configured.
+
+Default test-safe configuration:
+
+```env
+OCR_PROVIDER=mock
+OCR_MOCK_FALLBACK=true
+```
+
+Doubao Vision configuration:
+
+```env
+OCR_PROVIDER=doubao_vision
+OCR_MOCK_FALLBACK=true
+DOUBAO_BASE_URL=https://ark.cn-beijing.volces.com/api/v3
+DOUBAO_API_KEY=your_volcengine_ark_api_key
+DOUBAO_VISION_MODEL=your_vision_model_or_endpoint_id
+```
+
+To get Doubao credentials, create a Volcengine account, open the Ark console, create an API key under API key management, and enable or create access to a vision-capable Doubao model. Put the key only in local `.env`; do not paste it into source files or commit it.
+
+Mathpix is intentionally not the active MVP OCR provider, but the environment placeholders are present for a future adapter.
+
 ## Test
 
 ```powershell
@@ -58,5 +83,6 @@ Current scaffold implements:
 
 - `GET /health`
 - `POST /chat/stream` SSE endpoint with OpenAI-compatible LLM provider support and mock fallback
+- `POST /ocr/recognize` with mock fallback and Doubao Vision provider support
 - `GET /sessions`
 - `GET /sessions/{session_id}`

@@ -49,10 +49,27 @@ class Settings:
     llm_api_key: str
     llm_mock_fallback: bool
     llm_timeout_seconds: float
+    ocr_provider: str
+    ocr_mock_fallback: bool
+    ocr_timeout_seconds: float
+    doubao_base_url: str
+    doubao_api_key: str
+    doubao_vision_model: str
+    mathpix_api_url: str
+    mathpix_app_id: str
+    mathpix_app_key: str
 
     @property
     def has_llm_credentials(self) -> bool:
         return bool(self.llm_base_url and self.llm_model and self.llm_api_key)
+
+    @property
+    def has_doubao_ocr_credentials(self) -> bool:
+        return bool(self.doubao_base_url and self.doubao_api_key and self.doubao_vision_model)
+
+    @property
+    def has_mathpix_credentials(self) -> bool:
+        return bool(self.mathpix_api_url and self.mathpix_app_id and self.mathpix_app_key)
 
 
 @lru_cache(maxsize=1)
@@ -65,4 +82,13 @@ def get_settings() -> Settings:
         llm_api_key=_get_env("LLM_API_KEY", ""),
         llm_mock_fallback=_get_bool("LLM_MOCK_FALLBACK", True),
         llm_timeout_seconds=_get_float("LLM_TIMEOUT_SECONDS", 60),
+        ocr_provider=_get_env("OCR_PROVIDER", "mock"),
+        ocr_mock_fallback=_get_bool("OCR_MOCK_FALLBACK", True),
+        ocr_timeout_seconds=_get_float("OCR_TIMEOUT_SECONDS", 60),
+        doubao_base_url=_get_env("DOUBAO_BASE_URL", "https://ark.cn-beijing.volces.com/api/v3"),
+        doubao_api_key=_get_env("DOUBAO_API_KEY", ""),
+        doubao_vision_model=_get_env("DOUBAO_VISION_MODEL", ""),
+        mathpix_api_url=_get_env("MATHPIX_API_URL", "https://api.mathpix.com/v3/text"),
+        mathpix_app_id=_get_env("MATHPIX_APP_ID", ""),
+        mathpix_app_key=_get_env("MATHPIX_APP_KEY", ""),
     )

@@ -92,10 +92,11 @@ Turn the current chat-only slice into a cohesive local MVP demo with chat, answe
 - UI direction is a productized learning workspace: left session rail, central chat/learning area, text/image input modes, inline OCR confirmation, and inline plot viewer. Backend/debug metadata should not be exposed as normal user-facing UI.
 - Backend now has lightweight SQLite session/message/artifact persistence and session read APIs.
 - Chat stream now records user and assistant messages when a session is active.
+- Backend now has `POST /ocr/recognize` with service/provider boundaries, mock OCR fallback, Doubao Vision provider support, and Mathpix adapter placeholder support.
 
 ## Next Tasks
 
-- Implement `POST /ocr/recognize` through OCR service/provider boundaries, using mock fallback and Doubao configuration placeholders.
+- Add the frontend OCR upload, preview, editable recognition, and confirm-to-chat flow.
 - Implement `POST /plots/preview` for Plotly-style `function2d` and `surface3d` specs, then connect the frontend Plot viewer.
 - Refactor the frontend workspace into chat, OCR, plots, and session surfaces without showing backend debug metadata as normal UI.
 - Connect OCR confirmation and visualization suggestions into the chat loop.
@@ -105,6 +106,7 @@ Turn the current chat-only slice into a cohesive local MVP demo with chat, answe
 ## Blockers
 
 - Live LLM and live Doubao OCR smoke checks require local API keys in `apps/api/.env`.
+- Doubao OCR live smoke additionally requires a vision-capable model or endpoint id in `DOUBAO_VISION_MODEL`.
 - Mathpix is not the active OCR provider because the user does not accept its current setup/billing requirement for this MVP; keep it as a future adapter path only.
 
 ## Exit Checklist

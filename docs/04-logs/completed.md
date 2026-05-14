@@ -122,3 +122,10 @@
 - Updated chat streaming so user and assistant messages are persisted without changing the SSE contract.
 - Documented `DATABASE_URL` in the API environment example and README.
 - Verified backend pytest with session persistence coverage.
+
+## OCR Backend Slice
+
+- Added `POST /ocr/recognize` with multipart upload handling and unified error responses.
+- Added OCR schema, service, provider boundary, mock provider, Doubao Vision provider path, and future Mathpix adapter path.
+- Added OCR configuration placeholders to `.env.example` and documented Doubao credential setup in the API README.
+- Verified backend pytest with OCR API, validation, mock fallback, and Doubao provider selection coverage.
