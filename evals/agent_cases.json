@@ -1,0 +1,180 @@
+[
+  {
+    "id": "agent-001",
+    "title": "Concept explanation defaults to guided boundary clarification",
+    "input": {
+      "message": "一致连续和普通连续有什么区别？",
+      "answer_mode": "guided"
+    },
+    "expected": {
+      "question_type": "conceptual",
+      "answer_mode": "guided",
+      "should_visualize": false
+    },
+    "must": [
+      "distinguish local pointwise continuity from global uniform control",
+      "use a short guiding question or next action"
+    ],
+    "must_not": [
+      "dump a long textbook-style essay",
+      "ignore the requested guided mode"
+    ],
+    "notes": "Conceptual answers should help the learner notice the role of delta not depending on x."
+  },
+  {
+    "id": "agent-002",
+    "title": "Computational question in direct mode gives answer and key steps",
+    "input": {
+      "message": "求 lim(x->0) sin(x)/x",
+      "answer_mode": "direct"
+    },
+    "expected": {
+      "question_type": "computational",
+      "answer_mode": "direct",
+      "should_visualize": false
+    },
+    "must": [
+      "give the final answer 1",
+      "include the key reason briefly"
+    ],
+    "must_not": [
+      "refuse to give the answer because of Socratic style",
+      "ask multiple unnecessary questions before answering"
+    ],
+    "notes": "Direct mode should be respected when the user wants a quick result."
+  },
+  {
+    "id": "agent-003",
+    "title": "Computational question in hint mode avoids full solution",
+    "input": {
+      "message": "求 lim(x->0) (e^x - 1)/x",
+      "answer_mode": "hint"
+    },
+    "expected": {
+      "question_type": "computational",
+      "answer_mode": "hint",
+      "should_visualize": false
+    },
+    "must": [
+      "provide one key hint",
+      "suggest a next step"
+    ],
+    "must_not": [
+      "give the complete solution immediately",
+      "produce a long multi-step proof"
+    ],
+    "notes": "Hint mode preserves the student's thinking space."
+  },
+  {
+    "id": "agent-004",
+    "title": "Proof question identifies proof structure before full proof",
+    "input": {
+      "message": "证明闭区间上连续函数必有最大值",
+      "answer_mode": "guided"
+    },
+    "expected": {
+      "question_type": "proof",
+      "answer_mode": "guided",
+      "should_visualize": false
+    },
+    "must": [
+      "identify the theorem or proof structure",
+      "point to the compactness or sequence argument"
+    ],
+    "must_not": [
+      "write a full polished proof without prompting",
+      "treat it as a numerical computation"
+    ],
+    "notes": "Proof guidance should locate the missing logical bridge."
+  },
+  {
+    "id": "agent-005",
+    "title": "OCR confirmed text is treated as user-editable input",
+    "input": {
+      "message": "请帮我做这道题",
+      "confirmed_ocr_text": "求 lim_{x\\to 0} \\frac{1-cos x}{x^2}",
+      "answer_mode": "guided"
+    },
+    "expected": {
+      "question_type": "computational",
+      "answer_mode": "guided",
+      "should_visualize": false
+    },
+    "must": [
+      "use the confirmed OCR text as the actual math problem",
+      "give a step-by-step hint"
+    ],
+    "must_not": [
+      "ask the user to upload the image again",
+      "ignore the confirmed OCR text"
+    ],
+    "notes": "OCR output enters chat only after user confirmation."
+  },
+  {
+    "id": "agent-006",
+    "title": "Citation safety when retrieval context is absent",
+    "input": {
+      "message": "根据课本说明一下一致收敛的定义，并标出来源",
+      "answer_mode": "direct"
+    },
+    "expected": {
+      "question_type": "conceptual",
+      "answer_mode": "direct",
+      "requires_retrieval": true
+    },
+    "must": [
+      "state when no source is available",
+      "avoid fake page or theorem numbers"
+    ],
+    "must_not": [
+      "invent a textbook page",
+      "invent a theorem identifier"
+    ],
+    "notes": "Retrieval is optional in MVP, so source claims must be conservative."
+  },
+  {
+    "id": "agent-007",
+    "title": "Visualization-oriented question can suggest plot metadata",
+    "input": {
+      "message": "画一下 z = sin(x*y) 的三维图像，帮我理解形状",
+      "answer_mode": "direct"
+    },
+    "expected": {
+      "question_type": "visualization",
+      "answer_mode": "direct",
+      "should_visualize": true,
+      "plot_type": "surface3d"
+    },
+    "must": [
+      "recognize the need for visualization",
+      "explain the plot meaning briefly"
+    ],
+    "must_not": [
+      "only give symbolic algebra",
+      "say visualization is out of MVP scope"
+    ],
+    "notes": "Visualization is an MVP highlight."
+  },
+  {
+    "id": "agent-008",
+    "title": "Ambiguous broad request asks a concise clarification",
+    "input": {
+      "message": "我完全不懂数学分析，帮我学一下",
+      "answer_mode": "guided"
+    },
+    "expected": {
+      "question_type": "unknown",
+      "answer_mode": "guided",
+      "should_visualize": false
+    },
+    "must": [
+      "ask for a narrower topic or current problem",
+      "offer a small next step"
+    ],
+    "must_not": [
+      "generate a full course plan as if requested",
+      "expand scope into a learning path system"
+    ],
+    "notes": "The product is not a full personalized learning path engine."
+  }
+]
