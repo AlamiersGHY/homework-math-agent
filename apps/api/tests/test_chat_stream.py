@@ -55,6 +55,39 @@ def test_chat_stream_includes_plot_suggestion_for_visualization_question() -> No
     assert '"expression": "sin(x*y)"' in body
 
 
+def test_chat_stream_suggests_region_plot_for_simple_region_question() -> None:
+    client = TestClient(app)
+
+    with client.stream(
+        "POST",
+        "/chat/stream",
+        json={"message": "积分区域 D: 0<=x<=1, 0<=y<=x，帮我画一下区域", "answer_mode": "direct"},
+    ) as response:
+        body = response.read().decode("utf-8")
+
+    assert response.status_code == 200
+    assert '"question_type": "visualization"' in body
+    assert '"should_visualize": true' in body
+    assert '"plot_type": "region2d"' in body
+    assert '"expression": "0<=x<=1, 0<=y<=x' in body
+
+
+def test_chat_stream_does_not_suggest_complex_implicit_surface() -> None:
+    client = TestClient(app)
+
+    with client.stream(
+        "POST",
+        "/chat/stream",
+        json={"message": "画出 x^4 + y^4 + z^4 = 1 的精确三维隐式曲面", "answer_mode": "direct"},
+    ) as response:
+        body = response.read().decode("utf-8")
+
+    assert response.status_code == 200
+    assert '"question_type": "visualization"' in body
+    assert '"should_visualize": false' in body
+    assert '"plot_suggestion": null' in body
+
+
 def test_chat_stream_falls_back_to_mock_without_api_key(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("LLM_PROVIDER", "openai_compatible")
     monkeypatch.setenv("LLM_BASE_URL", "https://api.deepseek.com")

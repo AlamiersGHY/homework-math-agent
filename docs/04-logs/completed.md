@@ -144,3 +144,10 @@
 - Added editable OCR confirmation before recognized text enters chat.
 - Added a Plotly viewer that renders backend Plotly-style specs without rederiving math in the UI.
 - Added desktop and mobile browser QA coverage for initial layout, chat streaming, plot rendering, and OCR-confirmed chat flow.
+
+## Automation And Eval Wrappers
+
+- Added project-level wrappers for backend tests, deterministic behavior evals, and sequential full checks.
+- Added a deterministic eval runner for current classification, answer mode, visualization trigger, plot-type, and Plotly preview behavior.
+- Closed the eval-runner tech debt and resolved the known Next typecheck/build race through sequential `check` orchestration.
+- Extended the bounded plotting slice so simple triangular `region2d` integration regions are supported and complex implicit surfaces are not forced into MVP plot suggestions.

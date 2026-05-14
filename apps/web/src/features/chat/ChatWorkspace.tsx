@@ -695,7 +695,7 @@ function PlotPanel({
     <div className="rounded-lg border border-emerald-200 bg-white p-4 shadow-sm">
       <p className="text-sm font-semibold text-neutral-950">这道题适合配合图形理解</p>
       <p className="mt-1 text-sm leading-6 text-neutral-600">
-        将生成 {activePlotSuggestion.plot_type === "surface3d" ? "三维曲面" : "二维函数"}：
+        将生成 {getPlotTypeLabel(activePlotSuggestion.plot_type)}：
         <span className="font-medium text-neutral-900">{activePlotSuggestion.expression}</span>
       </p>
       <button
@@ -707,6 +707,16 @@ function PlotPanel({
       </button>
     </div>
   );
+}
+
+function getPlotTypeLabel(plotType: PlotPreviewRequest["plot_type"]) {
+  if (plotType === "surface3d") {
+    return "三维曲面";
+  }
+  if (plotType === "region2d") {
+    return "二维区域";
+  }
+  return "二维函数";
 }
 
 function Composer({

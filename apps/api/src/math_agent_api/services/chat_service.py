@@ -27,7 +27,7 @@ def format_sse(event: str, data: dict) -> str:
 
 def classify_question(message: str) -> QuestionType:
     normalized = message.lower()
-    if any(token in message for token in ["画", "图像", "曲面", "可视化"]) or "z =" in normalized:
+    if any(token in message for token in ["画", "图像", "曲面", "区域", "可视化"]) or "z =" in normalized:
         return QuestionType.VISUALIZATION
     if "证明" in message:
         return QuestionType.PROOF
@@ -38,15 +38,28 @@ def classify_question(message: str) -> QuestionType:
     return QuestionType.UNKNOWN
 
 
-def should_visualize(question_type: QuestionType) -> bool:
-    return question_type == QuestionType.VISUALIZATION
+def should_visualize(question_type: QuestionType, message: str | None = None) -> bool:
+    if question_type != QuestionType.VISUALIZATION:
+        return False
+    if message and _is_complex_implicit_surface(message):
+        return False
+    return True
 
 
 def create_plot_suggestion(message: str, question_type: QuestionType) -> dict | None:
-    if not should_visualize(question_type):
+    if not should_visualize(question_type, message):
         return None
 
     normalized = message.replace(" ", "").lower()
+    if _looks_like_region2d(message):
+        return {
+            "plot_type": "region2d",
+            "expression": _extract_region_expression(message),
+            "variables": ["x", "y"],
+            "ranges": {"x": [0, 1], "y": [0, 1]},
+            "source": "agent",
+        }
+
     expression = _extract_expression_after_equals(message)
     if "z=" in normalized or ("x" in normalized and "y" in normalized):
         return {
@@ -64,6 +77,27 @@ def create_plot_suggestion(message: str, question_type: QuestionType) -> dict | 
         "ranges": {"x": [-6, 6]},
         "source": "agent",
     }
+
+
+def _is_complex_implicit_surface(message: str) -> bool:
+    normalized = message.replace(" ", "").lower()
+    if "=" not in normalized:
+        return False
+    left_side = normalized.split("=", 1)[0]
+    return "x" in left_side and "y" in left_side and "z" in left_side
+
+
+def _looks_like_region2d(message: str) -> bool:
+    normalized = message.replace(" ", "").lower()
+    mentions_region = "区域" in message or "region" in normalized
+    return mentions_region and "x" in normalized and "y" in normalized and "<=" in normalized
+
+
+def _extract_region_expression(message: str) -> str:
+    for marker in ["D:", "d:", "D：", "d："]:
+        if marker in message:
+            return message.split(marker, 1)[1].replace("，", ",").strip()
+    return "0<=x<=1, 0<=y<=x"
 
 
 def _extract_expression_after_equals(message: str) -> str | None:
@@ -133,6 +167,7 @@ async def stream_chat_error(
     provider_name: str,
 ) -> AsyncIterator[str]:
     active_message = request.confirmed_ocr_text or request.message
+    plot_suggestion = create_plot_suggestion(active_message, question_type)
     yield format_sse(
         "start",
         StartEvent(session_id=session_id, answer_mode=request.answer_mode).model_dump(mode="json"),
@@ -141,8 +176,8 @@ async def stream_chat_error(
         "metadata",
         MetadataEvent(
             question_type=question_type,
-            should_visualize=should_visualize(question_type),
-            plot_suggestion=create_plot_suggestion(active_message, question_type),
+            should_visualize=plot_suggestion is not None,
+            plot_suggestion=plot_suggestion,
         ).model_dump(mode="json"),
     )
     async for event in stream_chat_error_tail(provider_name):
@@ -169,6 +204,7 @@ async def stream_chat_with_provider(
     db=None,
 ) -> AsyncIterator[str]:
     active_message = request.confirmed_ocr_text or request.message
+    plot_suggestion = create_plot_suggestion(active_message, question_type)
     ensure_session(db, session_id, default_answer_mode=request.answer_mode)
     append_message(
         db,
@@ -189,8 +225,8 @@ async def stream_chat_with_provider(
         "metadata",
         MetadataEvent(
             question_type=question_type,
-            should_visualize=should_visualize(question_type),
-            plot_suggestion=create_plot_suggestion(active_message, question_type),
+            should_visualize=plot_suggestion is not None,
+            plot_suggestion=plot_suggestion,
         ).model_dump(mode="json"),
     )
 

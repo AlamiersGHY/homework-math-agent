@@ -45,6 +45,26 @@ def test_plot_preview_surface3d_returns_plotly_surface() -> None:
     assert len(payload["spec"]["data"][0]["z"][0]) == 35
 
 
+def test_plot_preview_region2d_returns_plotly_region() -> None:
+    client = TestClient(app)
+
+    response = client.post(
+        "/plots/preview",
+        json={
+            "plot_type": "region2d",
+            "expression": "0<=x<=1, 0<=y<=x",
+            "variables": ["x", "y"],
+            "ranges": {"x": [0, 1], "y": [0, 1]},
+        },
+    )
+    payload = response.json()
+
+    assert response.status_code == 200
+    assert payload["plot_type"] == "region2d"
+    assert payload["renderer"] == "plotly"
+    assert payload["spec"]["data"][0]["fill"] == "toself"
+
+
 def test_plot_preview_rejects_unsafe_expression() -> None:
     client = TestClient(app)
 
@@ -55,6 +75,23 @@ def test_plot_preview_rejects_unsafe_expression() -> None:
             "expression": "__import__('os').system('dir')",
             "variables": ["x"],
             "ranges": {"x": [-1, 1]},
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "plot_validation_error"
+
+
+def test_plot_preview_rejects_unsupported_region() -> None:
+    client = TestClient(app)
+
+    response = client.post(
+        "/plots/preview",
+        json={
+            "plot_type": "region2d",
+            "expression": "x^2 + y^2 <= 1",
+            "variables": ["x", "y"],
+            "ranges": {"x": [-1, 1], "y": [-1, 1]},
         },
     )
 

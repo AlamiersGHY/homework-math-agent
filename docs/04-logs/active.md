@@ -97,12 +97,17 @@ Turn the current chat-only slice into a cohesive local MVP demo with chat, answe
 - Chat metadata now includes a bounded plot suggestion for visualization-oriented questions.
 - Frontend workspace has been refactored into a productized learning surface with a local session rail, text/image input modes, OCR confirmation, and Plotly plot rendering.
 - Browser QA passed against a mock backend for desktop `1440x1000` and mobile `390x844`: initial layout, chat stream, plot render, and OCR-confirmed chat flow.
+- Plot preview and chat metadata now also cover the bounded `region2d` MVP case for simple triangular integration regions.
+- Complex implicit surfaces are now treated as out of MVP plotting scope instead of being forced into a `surface3d` suggestion.
+- Project-level wrappers now exist for backend tests, deterministic evals, and sequential full checks: `.\scripts\test.ps1`, `.\scripts\eval.ps1`, and `.\scripts\check.ps1`.
+- `scripts/run_evals.py` now scores deterministic eval expectations for classification, answer mode propagation, visualization triggers, plot types, and supported Plotly preview generation.
 
 ## Next Tasks
 
-- Add project-level wrapper scripts and a minimal eval runner for current deterministic behavior.
+- Add final `dev` and `release-check` orchestration once the demo smoke path is stable.
 - Run live LLM smoke with the user's configured key and live Doubao OCR smoke after the user adds Doubao credentials.
 - Review real model outputs for prompt/LaTeX quality in direct/guided/hint modes.
+- Refresh demo/release README instructions so the current session/OCR/plot workspace is the documented entry path.
 - Keep running backend tests, frontend typecheck/build, API smoke checks, and browser verification for each completed unit.
 
 ## Blockers

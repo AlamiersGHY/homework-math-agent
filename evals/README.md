@@ -38,4 +38,14 @@ Rules:
 
 ## Runner Status
 
-No eval runner exists yet. Until one is implemented, these files act as the authoritative behavior examples for humans and agents. Runner work is tracked in `docs/04-logs/tech-debt-tracker.md`.
+A lightweight deterministic runner exists at `scripts/run_evals.py` and is exposed through `.\scripts\eval.ps1`.
+
+The runner currently checks non-LLM behavior that can be scored deterministically:
+
+- question classification
+- selected answer mode propagation
+- visualization trigger expectations
+- plot suggestion type
+- Plotly preview generation for supported visualization cases
+
+It does not grade free-form LLM answer text yet. The `must` and `must_not` fields remain human review anchors for prompt/output QA.

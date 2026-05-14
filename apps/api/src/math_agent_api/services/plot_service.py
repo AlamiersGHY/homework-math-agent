@@ -36,6 +36,8 @@ def create_plot_preview(request: PlotPreviewRequest) -> PlotPreviewResponse:
         return _create_function2d(request)
     if request.plot_type == PlotType.SURFACE3D:
         return _create_surface3d(request)
+    if request.plot_type == PlotType.REGION2D:
+        return _create_region2d(request)
     raise PlotValidationError("This plot type is not implemented in the MVP preview yet.")
 
 
@@ -124,6 +126,72 @@ def _create_surface3d(request: PlotPreviewRequest) -> PlotPreviewResponse:
             f"{x_name}\\in[{x_start:g},{x_end:g}], {y_name}\\in[{y_start:g},{y_end:g}] 上的起伏。"
         ),
     )
+
+
+def _create_region2d(request: PlotPreviewRequest) -> PlotPreviewResponse:
+    if len(request.variables) != 2:
+        raise PlotValidationError("region2d requires exactly two variables.")
+    x_name, y_name = request.variables
+    x_start, x_end = _get_valid_range(request.ranges, x_name)
+    y_start, y_end = _get_valid_range(request.ranges, y_name)
+
+    normalized = request.expression.replace(" ", "")
+    if not _is_supported_triangular_region(normalized, x_name, y_name):
+        raise PlotValidationError(
+            "Only simple triangular regions like 0<=x<=1, 0<=y<=x are supported in the MVP preview."
+        )
+
+    xs = _linspace(x_start, x_end, 80)
+    spec = {
+        "data": [
+            {
+                "type": "scatter",
+                "mode": "lines",
+                "x": [x_start, x_end, x_end, x_start],
+                "y": [y_start, y_start, y_end, y_start],
+                "fill": "toself",
+                "name": f"D: {request.expression}",
+                "line": {"color": "#0f766e", "width": 2},
+                "fillcolor": "rgba(20, 184, 166, 0.28)",
+            },
+            {
+                "type": "scatter",
+                "mode": "lines",
+                "x": xs,
+                "y": xs,
+                "name": f"{y_name} = {x_name}",
+                "line": {"color": "#334155", "width": 2, "dash": "dash"},
+            },
+        ],
+        "layout": {
+            "title": {"text": f"Region D: {request.expression}"},
+            "xaxis": {
+                "title": x_name,
+                "range": [x_start - 0.05, x_end + 0.05],
+                "zeroline": True,
+                "scaleanchor": "y",
+            },
+            "yaxis": {
+                "title": y_name,
+                "range": [y_start - 0.05, y_end + 0.05],
+                "zeroline": True,
+            },
+            "margin": {"l": 48, "r": 20, "t": 48, "b": 44},
+        },
+        "config": {"responsive": True, "displaylogo": False},
+    }
+    return PlotPreviewResponse(
+        plot_type=PlotType.REGION2D,
+        spec=spec,
+        explanation=f"该区域图展示 ${request.expression}$ 的简单三角形积分区域。",
+    )
+
+
+def _is_supported_triangular_region(expression: str, x_name: str, y_name: str) -> bool:
+    compact = expression.replace("，", ",")
+    lower_y = f"0<={y_name}<={x_name}" in compact
+    bounded_x = f"0<={x_name}<=1" in compact
+    return lower_y and bounded_x
 
 
 def _get_valid_range(ranges: dict[str, tuple[float, float]], variable: str) -> tuple[float, float]:
