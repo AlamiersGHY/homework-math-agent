@@ -11,6 +11,8 @@ Accepted ADRs are binding until a later ADR explicitly supersedes them. Do not s
 | `ADR-001-project-structure.md` | accepted | Project Structure | Root SDD layer, `apps/web`, `apps/api`, no single root `src/` |
 | `ADR-002-mvp-architecture.md` | accepted | MVP Architecture | SSE chat, SQLite allowed, service pipeline, provider boundaries, no LangGraph for MVP |
 | `ADR-003-tech-stack.md` | accepted | MVP Tech Stack | npm, venv/pip, Tailwind local components, fetch stream, SQLAlchemy lightweight, no LangGraph for MVP |
+| `ADR-004-planning-workflow.md` | accepted | Planning Workflow | Fuzzy requirement planning, solution-card output, active/completed/ADR boundaries |
+| `ADR-005-git-checkpoint-workflow.md` | accepted | Git Checkpoint Workflow | Auto-commit complete deliverable units after verification and SDD sync |
 
 ## When To Add An ADR
 

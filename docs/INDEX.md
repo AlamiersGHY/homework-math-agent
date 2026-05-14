@@ -23,6 +23,7 @@ This file is the routing guide for project documentation. It helps humans and AI
 
 ## Workflow
 
+- `02-workflow/planning-workflow.md`: fuzzy requirement intake, solution-card planning, decision gate, and execution-plan workflow.
 - `02-workflow/definition-of-done.md`: completion checklist.
 - `02-workflow/testing-strategy.md`: testing and eval expectations.
 - `02-workflow/feedback-loop.md`: feedback triage, decision, execution, and recording workflow.
@@ -34,6 +35,8 @@ This file is the routing guide for project documentation. It helps humans and AI
 - `03-decisions/ADR-001-project-structure.md`: initial project structure decision.
 - `03-decisions/ADR-002-mvp-architecture.md`: MVP architecture decision for SSE, SQLite, service pipeline, and provider boundaries.
 - `03-decisions/ADR-003-tech-stack.md`: MVP tech stack decision for npm, venv/pip, Tailwind local components, fetch stream, and SQLAlchemy lightweight use.
+- `03-decisions/ADR-004-planning-workflow.md`: planning workflow decision for fuzzy requirements, solution cards, and active/completed/ADR boundaries.
+- `03-decisions/ADR-005-git-checkpoint-workflow.md`: Git checkpoint decision for auto-committing complete deliverable units.
 
 ## Logs
 

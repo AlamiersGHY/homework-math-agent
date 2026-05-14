@@ -56,3 +56,16 @@
 - Implemented `GET /health` and mock `POST /chat/stream` SSE endpoints.
 - Added backend API tests for health and SSE event shape.
 - Verified backend pytest, backend uvicorn health smoke, frontend typecheck, frontend build, and frontend dev server smoke.
+
+## Planning Workflow Staticization
+
+- Added `docs/02-workflow/planning-workflow.md` for fuzzy requirement intake, context checking, solution-card output, execution planning, and Decision Gate behavior.
+- Updated `AGENTS.md` and `docs/INDEX.md` so fuzzy requirements, UI ideas, product improvements, and planning requests route to the planning workflow.
+- Recorded `docs/03-decisions/ADR-004-planning-workflow.md`.
+- Clarified that active work belongs in `active.md`, completed delivery summaries belong in `completed.md`, and long-term constraints belong in ADRs.
+
+## Git Checkpoint Workflow Staticization
+
+- Added `docs/03-decisions/ADR-005-git-checkpoint-workflow.md`.
+- Updated `AGENTS.md` and `docs/02-workflow/definition-of-done.md` so complete deliverable units create local Git checkpoint commits after verification and SDD sync.
+- Clarified that Agents should stage only files belonging to the completed unit and must not commit ignored artifacts, secrets, dependency folders, local environments, or unrelated user changes.

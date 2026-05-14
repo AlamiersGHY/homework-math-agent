@@ -23,7 +23,10 @@ Use the runnable frontend/backend scaffold to implement the first useful chat sl
 - `docs/03-decisions/ADR-001-project-structure.md`
 - `docs/03-decisions/ADR-002-mvp-architecture.md`
 - `docs/03-decisions/ADR-003-tech-stack.md`
+- `docs/03-decisions/ADR-004-planning-workflow.md`
+- `docs/03-decisions/ADR-005-git-checkpoint-workflow.md`
 - `docs/03-decisions/README.md`
+- `docs/02-workflow/planning-workflow.md`
 - `docs/02-workflow/definition-of-done.md`
 - `docs/02-workflow/testing-strategy.md`
 - `docs/02-workflow/feedback-loop.md`
@@ -52,6 +55,8 @@ Use the runnable frontend/backend scaffold to implement the first useful chat sl
 - `apps/api` has a runnable FastAPI scaffold.
 - Backend `GET /health` and mock `POST /chat/stream` SSE are implemented and tested.
 - Frontend minimal scaffold page builds and starts locally.
+- Fuzzy requirement planning now has a routed workflow and ADR.
+- Complete deliverable units now require an automatic local Git checkpoint when safe.
 
 ## Next Tasks
 
@@ -69,4 +74,6 @@ Use the runnable frontend/backend scaffold to implement the first useful chat sl
 - New implementation should keep route handlers thin and use service/provider boundaries from architecture docs.
 - API changes must stay aligned with `docs/01-architecture/api-contracts.md`.
 - Frontend chat work should use native `fetch` stream for `POST /chat/stream`.
+- Fuzzy feature or UI ideas should start with `docs/02-workflow/planning-workflow.md` and a short solution card.
 - Before finalizing a coding task, run the relevant app-local tests or explain what could not be verified.
+- After completing a coherent deliverable unit, create a local Git checkpoint commit unless blocked by unrelated changes or explicit user instruction.

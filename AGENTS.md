@@ -38,6 +38,7 @@ Use this routing table to decide which documents must be read for a task:
 - Architecture, service boundaries, or system flow: read `docs/01-architecture/system-overview.md`.
 - Directory placement or code ownership: read `docs/01-architecture/directory-rules.md`.
 - API request/response shape: read `docs/01-architecture/api-contracts.md`.
+- Fuzzy requirements, UI ideas, product improvements, feature planning, or solution design requests: read `docs/02-workflow/planning-workflow.md`.
 - Task completion expectations: read `docs/02-workflow/definition-of-done.md`.
 - Testing or evaluation expectations: read `docs/02-workflow/testing-strategy.md`.
 - User feedback, bug reports, behavior complaints, or post-test findings: read `docs/02-workflow/feedback-loop.md`.
@@ -46,6 +47,8 @@ Use this routing table to decide which documents must be read for a task:
 
 The `Relevant Docs` section in `docs/04-logs/active.md` should be treated as the task-specific reading list.
 
+Use the planning workflow when the user gives a broad or unclear idea such as "I want a feature but have not fully designed it", "help me design this UI", "plan this requirement", or "what should this feature look like". Do not use the full planning workflow for small bug fixes, copy edits, already-approved plans, or narrow implementation changes that do not affect long-term direction.
+
 ## Project Knowledge Map
 
 - `README.md`: human-facing project overview, setup, and basic usage.
@@ -53,7 +56,7 @@ The `Relevant Docs` section in `docs/04-logs/active.md` should be treated as the
 - `docs/INDEX.md`: documentation router and reading guide.
 - `docs/00-product/`: product intent, scope, priorities, and roadmap.
 - `docs/01-architecture/`: system structure, code organization, technical standards, and API contracts.
-- `docs/02-workflow/`: task workflow, definition of done, testing expectations, and release process.
+- `docs/02-workflow/`: planning workflow, task workflow, definition of done, testing expectations, feedback handling, and release process.
 - `docs/03-decisions/`: accepted or proposed decisions. Accepted decisions override ad hoc suggestions unless explicitly revised.
 - `docs/04-logs/active.md`: current task state, relevant docs, progress, next steps, blockers, and exit checklist.
 - `docs/04-logs/completed.md`: concise milestone history.
@@ -114,6 +117,19 @@ Before the final response for a non-trivial task, update or propose updates to t
 - `docs/03-decisions/` if a durable architectural, product, workflow, or deployment decision was made.
 
 A task is not complete if the implementation is done but the relevant SDD state is stale.
+
+### 5. Checkpoint
+
+After a complete deliverable unit reaches `Done` or `Done with Risk`, create a local Git checkpoint commit automatically unless the user explicitly asks not to commit.
+
+Before committing:
+
+- Inspect `git status`.
+- Stage only files that belong to the completed unit.
+- Do not commit ignored caches, dependency folders, local environments, secrets, build outputs, or unrelated user changes.
+- If unrelated changes cannot be safely separated, do not force a commit; report the blocker instead.
+
+Do not create automatic commits for planning-only conversation, incomplete work, `Blocked`, or `Needs Decision` states.
 
 ## Decision Rules
 
@@ -186,5 +202,6 @@ When finishing a task, report:
 - what was verified
 - what was not verified, if anything
 - any remaining risk or follow-up recorded in SDD state
+- the Git checkpoint commit hash, if a commit was created
 
 Keep the response concise and grounded in files changed or decisions made.
