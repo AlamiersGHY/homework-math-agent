@@ -2,11 +2,11 @@
 
 ## Current Phase
 
-Phase 1 implementation bootstrap.
+Phase 1 first chat slice.
 
 ## Current Goal
 
-Use the runnable frontend/backend scaffold to implement the first useful chat slice.
+Move from the mock SSE chat UI slice toward real LLM provider integration.
 
 ## Relevant Docs
 
@@ -37,6 +37,10 @@ Use the runnable frontend/backend scaffold to implement the first useful chat sl
 - `apps/README.md`
 - `apps/web/README.md`
 - `apps/web/package.json`
+- `apps/web/src/app/page.tsx`
+- `apps/web/src/features/chat/ChatWorkspace.tsx`
+- `apps/web/src/lib/api/chatStream.ts`
+- `apps/web/src/types/chat.ts`
 - `apps/api/README.md`
 - `apps/api/requirements.txt`
 - `apps/api/requirements-dev.txt`
@@ -57,10 +61,13 @@ Use the runnable frontend/backend scaffold to implement the first useful chat sl
 - Frontend minimal scaffold page builds and starts locally.
 - Fuzzy requirement planning now has a routed workflow and ADR.
 - Complete deliverable units now require an automatic local Git checkpoint when safe.
+- First web chat UI slice is implemented with answer mode switching, mock SSE streaming, API status, and metadata display.
 
 ## Next Tasks
 
-- Add the first frontend chat UI and API client against the mock SSE endpoint.
+- Connect a real LLM provider behind the existing chat service/provider boundary.
+- Preserve the current `POST /chat/stream` contract while replacing mock answer generation.
+- Add or update eval cases for answer mode behavior once real LLM output is introduced.
 - Add project-level wrapper scripts for common `dev`, `test`, and `check` workflows.
 - Start connecting eval cases to an executable runner after the first chat slice exists.
 - Add OCR and plot endpoint skeletons when their first UI flows are ready.

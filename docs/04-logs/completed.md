@@ -69,3 +69,12 @@
 - Added `docs/03-decisions/ADR-005-git-checkpoint-workflow.md`.
 - Updated `AGENTS.md` and `docs/02-workflow/definition-of-done.md` so complete deliverable units create local Git checkpoint commits after verification and SDD sync.
 - Clarified that Agents should stage only files belonging to the completed unit and must not commit ignored artifacts, secrets, dependency folders, local environments, or unrelated user changes.
+
+## First Chat UI Slice
+
+- Replaced the scaffold landing page with a lightweight math learning workspace UI.
+- Added answer mode switching for direct, guided, and hint modes.
+- Added a typed frontend API layer for `GET /health` and `POST /chat/stream`.
+- Added a native `fetch` stream SSE parser for `start`, `metadata`, `delta`, `error`, and `done` events.
+- Connected the UI to the backend mock chat stream and displayed question type, visualization suggestion, session id, and streaming state.
+- Verified backend pytest, frontend typecheck, frontend build, direct SSE event shape, and Chrome headless layout rendering.
