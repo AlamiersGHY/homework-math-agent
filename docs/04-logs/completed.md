@@ -106,3 +106,11 @@
 - Added frontend normalization for common bare LaTeX output patterns before Markdown rendering, including `\(...\)`, `\[...\]`, bare LaTeX command runs, and bracketed formula lines.
 - Tightened the backend chat prompt so real LLM output should use `$...$` and `$$...$$` delimiters instead of bare `\frac`, `\lim`, or square-bracketed formulas.
 - Added an eval case requiring renderable Markdown LaTeX and forbidding bare math commands in answer output.
+
+## Full MVP Demo Takeover Planning
+
+- Reset active work from Phase 1 chat closure to full MVP demo completion.
+- Confirmed the demo scope: chat, answer modes, local session history, OCR confirmation, Plotly-style visualization, automated checks, SDD sync, and checkpoint commits.
+- Confirmed exclusions for this demo: no RAG, no LangGraph, no login/account system, no professional implicit-surface modeling.
+- Recorded `ADR-006-ocr-provider-strategy.md`: mock-first for tests, Doubao Vision as the preferred live MVP OCR provider, and Mathpix as a future professional adapter.
+- Clarified the target UI direction as a productized learning workspace rather than a debug-heavy chat panel.

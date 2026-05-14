@@ -2,11 +2,11 @@
 
 ## Current Phase
 
-Phase 1 chat experience closure.
+Full MVP demo completion.
 
 ## Current Goal
 
-Stabilize the first usable chat learning experience before moving into OCR and Plot flows.
+Turn the current chat-only slice into a cohesive local MVP demo with chat, answer-mode control, lightweight session history, OCR input confirmation, Plotly-style 2D/3D visualization, automated checks, and release-ready demo documentation.
 
 ## Relevant Docs
 
@@ -25,6 +25,7 @@ Stabilize the first usable chat learning experience before moving into OCR and P
 - `docs/03-decisions/ADR-003-tech-stack.md`
 - `docs/03-decisions/ADR-004-planning-workflow.md`
 - `docs/03-decisions/ADR-005-git-checkpoint-workflow.md`
+- `docs/03-decisions/ADR-006-ocr-provider-strategy.md`
 - `docs/03-decisions/README.md`
 - `docs/02-workflow/planning-workflow.md`
 - `docs/02-workflow/definition-of-done.md`
@@ -51,8 +52,12 @@ Stabilize the first usable chat learning experience before moving into OCR and P
 - `apps/api/.env.example`
 - `apps/api/src/math_agent_api/core/config.py`
 - `apps/api/src/math_agent_api/providers/llm.py`
+- `apps/api/src/math_agent_api/providers/ocr.py`
 - `apps/api/src/math_agent_api/prompts/chat.py`
 - `apps/api/src/math_agent_api/services/chat_service.py`
+- `apps/api/src/math_agent_api/services/ocr_service.py`
+- `apps/api/src/math_agent_api/services/plot_service.py`
+- `apps/api/src/math_agent_api/services/session_service.py`
 - `apps/api/tests/test_chat_stream.py`
 - `docs/04-logs/tech-debt-tracker.md`
 - `scripts/README.md`
@@ -80,19 +85,26 @@ Stabilize the first usable chat learning experience before moving into OCR and P
 - Completed answers now show follow-up suggestion chips for one-click next turns.
 - User feedback exposed poor formula rendering from bare LaTeX output; frontend now normalizes common bare LaTeX patterns before Markdown rendering.
 - Backend prompt now explicitly requires renderable Markdown LaTeX delimiters for formulas.
+- Current work has been reset from Phase 1 closure to full MVP demo completion.
+- Product runtime remains the accepted lightweight service pipeline: no LangGraph, no RAG, no login/account system for this demo.
+- OCR strategy is Doubao-first for the real provider, mock-first for automated development and tests, with Mathpix kept as the future professional OCR adapter.
+- Session history is accepted as local SQLite-backed demo persistence only.
+- UI direction is a productized learning workspace: left session rail, central chat/learning area, text/image input modes, inline OCR confirmation, and inline plot viewer. Backend/debug metadata should not be exposed as normal user-facing UI.
 
 ## Next Tasks
 
-- Add a local `apps/api/.env` with a real `LLM_API_KEY` and run a live DeepSeek smoke test.
-- Tune prompt wording after reviewing the first real model outputs for direct/guided/hint modes.
-- Review formula rendering with real model outputs again after the hardening fix.
-- Add project-level wrapper scripts for common `dev`, `test`, and `check` workflows.
-- Start connecting eval cases to an executable runner after the first chat slice exists.
-- Add OCR and plot endpoint skeletons when their first UI flows are ready.
+- Implement lightweight SQLite session/message/artifact persistence with tests.
+- Implement `POST /ocr/recognize` through OCR service/provider boundaries, using mock fallback and Doubao configuration placeholders.
+- Implement `POST /plots/preview` for Plotly-style `function2d` and `surface3d` specs, then connect the frontend Plot viewer.
+- Refactor the frontend workspace into chat, OCR, plots, and session surfaces without showing backend debug metadata as normal UI.
+- Connect OCR confirmation and visualization suggestions into the chat loop.
+- Add project-level wrapper scripts and a minimal eval runner for current deterministic behavior.
+- Run backend tests, frontend typecheck/build, API smoke checks, and browser verification for each completed unit.
 
 ## Blockers
 
-- Live DeepSeek verification requires a local API key in `apps/api/.env`.
+- Live LLM and live Doubao OCR smoke checks require local API keys in `apps/api/.env`.
+- Mathpix is not the active OCR provider because the user does not accept its current setup/billing requirement for this MVP; keep it as a future adapter path only.
 
 ## Exit Checklist
 
@@ -100,6 +112,9 @@ Stabilize the first usable chat learning experience before moving into OCR and P
 - API changes must stay aligned with `docs/01-architecture/api-contracts.md`.
 - Frontend chat work should use native `fetch` stream for `POST /chat/stream`.
 - Math rendering/UI tasks must be checked with at least one formula-heavy answer, not only the empty starter screen.
-- Fuzzy feature or UI ideas should start with `docs/02-workflow/planning-workflow.md` and a short solution card.
+- OCR must return editable text for user confirmation and must not auto-submit recognized text into chat.
+- Plot viewer must consume backend Plotly-style specs and must not rederive math in the UI component.
+- Session persistence must remain local/lightweight and must not introduce accounts, login, permissions, or cross-device sync.
+- User-facing UI should show learning state and next actions, not raw provider/session/debug internals.
 - Before finalizing a coding task, run the relevant app-local tests or explain what could not be verified.
 - After completing a coherent deliverable unit, create a local Git checkpoint commit unless blocked by unrelated changes or explicit user instruction.
