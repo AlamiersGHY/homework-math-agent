@@ -89,3 +89,13 @@
 - Added `.env.example` and API README instructions for local DeepSeek configuration.
 - Updated agent eval cases to guard against leaking provider plumbing into the learning conversation.
 - Verified backend pytest for health, SSE event shape, mock fallback, provider chunk mapping, and provider error mapping.
+
+## Chat Experience Closure
+
+- Added Markdown and LaTeX rendering for chat messages using `react-markdown`, `remark-math`, `rehype-katex`, and KaTeX CSS.
+- Added a dedicated `MathMarkdown` component so math rendering stays out of the main chat workspace logic.
+- Added a lightweight new-session flow that clears the current conversation and returns the user to the starter screen.
+- Kept multi-turn context in React state and continued sending previous turns to the existing chat stream API.
+- Added follow-up suggestion chips after completed answers for quick next-turn actions such as direct answer, hint, guided explanation, or similar exercise.
+- Updated the web README and active work log to reflect the current Phase 1 chat experience state.
+- Verified frontend typecheck, frontend production build, backend pytest, and headless Chrome layout rendering of the starter screen.

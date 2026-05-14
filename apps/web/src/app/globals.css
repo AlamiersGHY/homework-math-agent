@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "katex/dist/katex.min.css";
 
 :root {
   --background: #f7f7f4;
@@ -25,4 +26,73 @@ textarea {
 ::selection {
   background: #bbf7d0;
   color: #111827;
+}
+
+.math-markdown {
+  overflow-wrap: anywhere;
+}
+
+.math-markdown > * + * {
+  margin-top: 0.65rem;
+}
+
+.math-markdown p,
+.math-markdown li {
+  font-size: 0.925rem;
+  line-height: 1.65;
+}
+
+.math-markdown ul,
+.math-markdown ol {
+  padding-left: 1.25rem;
+}
+
+.math-markdown ul {
+  list-style: disc;
+}
+
+.math-markdown ol {
+  list-style: decimal;
+}
+
+.math-markdown code {
+  border-radius: 0.25rem;
+  background: #e5e7eb;
+  padding: 0.1rem 0.28rem;
+  font-size: 0.86em;
+}
+
+.math-markdown pre {
+  overflow-x: auto;
+  border-radius: 0.5rem;
+  background: #111827;
+  padding: 0.85rem;
+  color: #f9fafb;
+}
+
+.math-markdown pre code {
+  background: transparent;
+  padding: 0;
+  color: inherit;
+}
+
+.math-markdown a {
+  color: #047857;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.math-markdown .katex-display {
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 0.25rem 0;
+}
+
+.math-markdown-inverted code {
+  background: rgb(255 255 255 / 0.16);
+}
+
+.math-markdown-inverted a {
+  color: #bbf7d0;
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { MathMarkdown } from "@/components/MathMarkdown";
 import { checkHealth, type HealthResponse } from "@/lib/api/health";
 import { streamChat } from "@/lib/api/chatStream";
 import type {
@@ -22,9 +23,9 @@ const answerModes: Array<{
 ];
 
 const examples = [
-  "求 lim(x->0) sin(x)/x，并说明关键思路",
+  "求 lim(x→0) sin(x)/x，并说明关键思路",
   "证明单调有界数列必有极限",
-  "画出 z = sin(x*y) 的曲面并解释形状"
+  "画出 z = sin(xy) 的曲面并解释形状"
 ];
 
 const questionTypeLabels: Record<QuestionType, string> = {
@@ -54,6 +55,12 @@ type ChatMetadata = {
   finishReason: string | null;
 };
 
+type FollowUpSuggestion = {
+  label: string;
+  prompt: string;
+  answerMode: AnswerMode;
+};
+
 const initialMetadata: ChatMetadata = {
   sessionId: null,
   answerMode: "guided",
@@ -76,6 +83,16 @@ export function ChatWorkspace() {
   const currentMode = useMemo(
     () => answerModes.find((mode) => mode.value === answerMode) ?? answerModes[0],
     [answerMode]
+  );
+  const followUpSuggestions = useMemo(
+    () =>
+      createFollowUpSuggestions({
+        answerMode,
+        isStreaming,
+        messages,
+        metadata
+      }),
+    [answerMode, isStreaming, messages, metadata]
   );
 
   useEffect(() => {
@@ -109,14 +126,19 @@ export function ChatWorkspace() {
     });
   }, [messages]);
 
-  async function handleSubmit(event?: FormEvent<HTMLFormElement>) {
-    event?.preventDefault();
-    const message = input.trim();
+  async function sendMessage(messageText: string, modeOverride = answerMode) {
+    const message = messageText.trim();
 
     if (!message || isStreaming) {
       return;
     }
 
+    const previousTurns = messages
+      .filter((item) => item.content.trim())
+      .map((item) => ({
+        role: item.role,
+        content: item.content
+      }));
     const userMessage: ChatMessage = {
       id: createId("user"),
       role: "user",
@@ -136,7 +158,7 @@ export function ChatWorkspace() {
     setError(null);
     setMetadata({
       ...initialMetadata,
-      answerMode
+      answerMode: modeOverride
     });
     setIsStreaming(true);
 
@@ -147,14 +169,11 @@ export function ChatWorkspace() {
       await streamChat(
         {
           message,
-          answer_mode: answerMode,
+          answer_mode: modeOverride,
           session_id: metadata.sessionId,
           confirmed_ocr_text: null,
           context: {
-            previous_turns: messages.map((item) => ({
-              role: item.role,
-              content: item.content
-            })),
+            previous_turns: previousTurns,
             style: "default"
           }
         },
@@ -231,6 +250,16 @@ export function ChatWorkspace() {
     }
   }
 
+  async function handleSubmit(event?: FormEvent<HTMLFormElement>) {
+    event?.preventDefault();
+    await sendMessage(input);
+  }
+
+  async function sendSuggestion(suggestion: FollowUpSuggestion) {
+    setAnswerMode(suggestion.answerMode);
+    await sendMessage(suggestion.prompt, suggestion.answerMode);
+  }
+
   function stopStreaming() {
     abortControllerRef.current?.abort();
     setIsStreaming(false);
@@ -239,6 +268,19 @@ export function ChatWorkspace() {
         item.status === "streaming" ? { ...item, status: "done" } : item
       )
     );
+  }
+
+  function startNewSession() {
+    abortControllerRef.current?.abort();
+    abortControllerRef.current = null;
+    setMessages([]);
+    setInput("");
+    setError(null);
+    setIsStreaming(false);
+    setMetadata({
+      ...initialMetadata,
+      answerMode
+    });
   }
 
   return (
@@ -258,6 +300,14 @@ export function ChatWorkspace() {
             <span className="rounded-full border border-neutral-200 bg-white px-3 py-1 font-medium text-neutral-700">
               {currentMode.label}
             </span>
+            <button
+              className="rounded-full border border-neutral-300 bg-white px-3 py-1 font-semibold text-neutral-800 transition hover:bg-neutral-100 disabled:cursor-not-allowed disabled:text-neutral-300"
+              disabled={isStreaming && messages.length === 0}
+              onClick={startNewSession}
+              type="button"
+            >
+              新会话
+            </button>
           </div>
         </header>
 
@@ -292,6 +342,11 @@ export function ChatWorkspace() {
                 answerMode={answerMode}
                 disabled={isStreaming}
                 onChange={setAnswerMode}
+              />
+              <FollowUpSuggestions
+                disabled={isStreaming}
+                onPick={sendSuggestion}
+                suggestions={followUpSuggestions}
               />
               <div className="mt-3 flex flex-col gap-3 sm:flex-row">
                 <textarea
@@ -349,6 +404,16 @@ export function ChatWorkspace() {
               <p className="break-all text-sm leading-6 text-neutral-600">
                 {metadata.sessionId ?? "发送第一条消息后建立会话"}
               </p>
+              {messages.length > 0 ? (
+                <button
+                  className="mt-3 w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm font-semibold text-neutral-800 transition hover:bg-neutral-100 disabled:cursor-not-allowed disabled:text-neutral-300"
+                  disabled={isStreaming}
+                  onClick={startNewSession}
+                  type="button"
+                >
+                  返回开始页
+                </button>
+              ) : null}
             </PanelBlock>
           </aside>
         </div>
@@ -462,10 +527,12 @@ function MessageBubble({ message }: { message: ChatMessage }) {
         <p className="text-xs font-semibold uppercase tracking-[0.12em] opacity-70">
           {isUser ? "You" : "Math Agent"}
         </p>
-        <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-6">
-          {message.content ||
-            (message.status === "streaming" ? "正在生成回答" : "暂无内容")}
-        </p>
+        <div className="mt-2">
+          <MathMarkdown inverted={isUser}>
+            {message.content ||
+              (message.status === "streaming" ? "正在生成回答" : "暂无内容")}
+          </MathMarkdown>
+        </div>
         {message.status === "streaming" ? (
           <span className="mt-3 block h-1 w-16 overflow-hidden rounded-full bg-neutral-200">
             <span className="block h-full w-1/2 animate-pulse rounded-full bg-emerald-600" />
@@ -473,6 +540,36 @@ function MessageBubble({ message }: { message: ChatMessage }) {
         ) : null}
       </div>
     </article>
+  );
+}
+
+function FollowUpSuggestions({
+  disabled,
+  onPick,
+  suggestions
+}: {
+  disabled: boolean;
+  onPick: (suggestion: FollowUpSuggestion) => void;
+  suggestions: FollowUpSuggestion[];
+}) {
+  if (suggestions.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="mt-3 flex flex-wrap gap-2">
+      {suggestions.map((suggestion) => (
+        <button
+          className="rounded-full border border-emerald-200 bg-white px-3 py-1.5 text-sm font-medium text-emerald-900 transition hover:bg-emerald-50 disabled:cursor-not-allowed disabled:text-neutral-300"
+          disabled={disabled}
+          key={suggestion.label}
+          onClick={() => onPick(suggestion)}
+          type="button"
+        >
+          {suggestion.label}
+        </button>
+      ))}
+    </div>
   );
 }
 
@@ -531,4 +628,98 @@ function createId(prefix: string) {
   }
 
   return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+function createFollowUpSuggestions({
+  answerMode,
+  isStreaming,
+  messages,
+  metadata
+}: {
+  answerMode: AnswerMode;
+  isStreaming: boolean;
+  messages: ChatMessage[];
+  metadata: ChatMetadata;
+}): FollowUpSuggestion[] {
+  if (isStreaming || messages.length === 0) {
+    return [];
+  }
+
+  const lastMessage = messages[messages.length - 1];
+  if (lastMessage.role !== "assistant" || lastMessage.status !== "done") {
+    return [];
+  }
+
+  const suggestions: FollowUpSuggestion[] = [];
+
+  if (answerMode !== "guided") {
+    suggestions.push({
+      label: "分步重讲",
+      prompt: "请用分步引导的方式重新讲这道题，先帮我找到下一步，不要一次性写成长篇完整答案。",
+      answerMode: "guided"
+    });
+  }
+
+  if (answerMode !== "direct") {
+    suggestions.push({
+      label: "直接给结论",
+      prompt: "请直接给出这道题的最终答案和关键步骤，尽量简洁。",
+      answerMode: "direct"
+    });
+  }
+
+  if (answerMode !== "hint") {
+    suggestions.push({
+      label: "只给提示",
+      prompt: "请只给我一个最关键的提示，不要给完整解答。",
+      answerMode: "hint"
+    });
+  }
+
+  const topicSuggestion = getTopicSuggestion(metadata.questionType);
+  if (topicSuggestion) {
+    suggestions.push(topicSuggestion);
+  }
+
+  return suggestions.slice(0, 4);
+}
+
+function getTopicSuggestion(questionType: QuestionType): FollowUpSuggestion | null {
+  if (questionType === "proof") {
+    return {
+      label: "证明框架",
+      prompt: "请先帮我拆出这道证明题的证明框架：已知什么、要证什么、关键桥梁是什么。",
+      answerMode: "guided"
+    };
+  }
+
+  if (questionType === "computational") {
+    return {
+      label: "类似练习",
+      prompt: "请给我一道同类型但数字或表达式稍微变化的练习题，并先不要给答案。",
+      answerMode: "hint"
+    };
+  }
+
+  if (questionType === "conceptual") {
+    return {
+      label: "举个例子",
+      prompt: "请用一个具体例子解释刚刚的概念，并指出最容易混淆的地方。",
+      answerMode: "guided"
+    };
+  }
+
+  if (questionType === "visualization") {
+    return {
+      label: "图像直觉",
+      prompt: "请从图像直觉角度解释这个函数或区域，重点说清楚形状和变化趋势。",
+      answerMode: "direct"
+    };
+  }
+
+  return {
+    label: "换个角度",
+    prompt: "请换一个更容易理解的角度解释刚刚的回答。",
+    answerMode: "guided"
+  };
 }
