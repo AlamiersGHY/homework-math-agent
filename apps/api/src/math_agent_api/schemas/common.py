@@ -15,6 +15,9 @@ class QuestionType(StrEnum):
     COMPUTATIONAL = "computational"
     PROOF = "proof"
     VISUALIZATION = "visualization"
+    MIXED = "mixed"
+    OCR_DERIVED = "ocr_derived"
+    OFF_TOPIC = "off_topic"
     UNKNOWN = "unknown"
 
 

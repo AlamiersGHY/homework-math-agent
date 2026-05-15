@@ -11,12 +11,10 @@ API_SRC = REPO_ROOT / "apps" / "api" / "src"
 if str(API_SRC) not in sys.path:
     sys.path.insert(0, str(API_SRC))
 
+from math_agent_api.schemas.chat import ChatStreamRequest  # noqa: E402
 from math_agent_api.schemas.common import PlotType  # noqa: E402
 from math_agent_api.schemas.plots import PlotPreviewRequest  # noqa: E402
-from math_agent_api.services.chat_service import (  # noqa: E402
-    classify_question,
-    create_plot_suggestion,
-)
+from math_agent_api.services.agent_policy_planner import plan_agent_turn  # noqa: E402
 from math_agent_api.services.plot_service import (  # noqa: E402
     PlotValidationError,
     create_plot_preview,
@@ -39,33 +37,40 @@ def active_message(case: dict[str, Any]) -> str:
     return payload.get("confirmed_ocr_text") or payload["message"]
 
 
+def build_request(case: dict[str, Any]) -> ChatStreamRequest:
+    payload = case["input"]
+    return ChatStreamRequest(
+        message=payload["message"],
+        confirmed_ocr_text=payload.get("confirmed_ocr_text"),
+        answer_mode=payload.get("answer_mode", "guided"),
+    )
+
+
 def check_agent_case(case: dict[str, Any]) -> list[EvalFailure]:
     failures: list[EvalFailure] = []
     expected = case.get("expected", {})
-    message = active_message(case)
-    question_type = classify_question(message)
-    plot_suggestion = create_plot_suggestion(message, question_type)
+    plan = plan_agent_turn(build_request(case))
+    plot_suggestion = plan.plot_suggestion_payload()
 
-    if "question_type" in expected and question_type != expected["question_type"]:
+    if "question_type" in expected and plan.question_type != expected["question_type"]:
         failures.append(
             EvalFailure(
                 case["id"],
-                f"expected question_type={expected['question_type']}, got {question_type}",
+                f"expected question_type={expected['question_type']}, got {plan.question_type}",
             )
         )
 
     if "answer_mode" in expected:
-        actual_mode = case["input"].get("answer_mode")
-        if actual_mode != expected["answer_mode"]:
+        if plan.answer_mode != expected["answer_mode"]:
             failures.append(
                 EvalFailure(
                     case["id"],
-                    f"expected answer_mode={expected['answer_mode']}, got {actual_mode}",
+                    f"expected answer_mode={expected['answer_mode']}, got {plan.answer_mode}",
                 )
             )
 
     if "should_visualize" in expected:
-        actual = plot_suggestion is not None
+        actual = plan.needs_plot
         if actual != expected["should_visualize"]:
             failures.append(
                 EvalFailure(
@@ -75,7 +80,7 @@ def check_agent_case(case: dict[str, Any]) -> list[EvalFailure]:
             )
 
     if "plot_type" in expected:
-        actual_plot_type = plot_suggestion.get("plot_type") if plot_suggestion else None
+        actual_plot_type = plan.plot_type.value if plan.plot_type else None
         if actual_plot_type != expected["plot_type"]:
             failures.append(
                 EvalFailure(
@@ -84,16 +89,40 @@ def check_agent_case(case: dict[str, Any]) -> list[EvalFailure]:
                 )
             )
 
+    expected_retrieval = expected.get("needs_retrieval", expected.get("requires_retrieval"))
+    if expected_retrieval is not None and plan.needs_retrieval != expected_retrieval:
+        failures.append(
+            EvalFailure(
+                case["id"],
+                f"expected needs_retrieval={expected_retrieval}, got {plan.needs_retrieval}",
+            )
+        )
+
+    if "needs_clarification" in expected and plan.needs_clarification != expected["needs_clarification"]:
+        failures.append(
+            EvalFailure(
+                case["id"],
+                f"expected needs_clarification={expected['needs_clarification']}, got {plan.needs_clarification}",
+            )
+        )
+
+    if "memory_action" in expected and plan.memory_action != expected["memory_action"]:
+        failures.append(
+            EvalFailure(
+                case["id"],
+                f"expected memory_action={expected['memory_action']}, got {plan.memory_action}",
+            )
+        )
+
     return failures
 
 
 def check_visual_case(case: dict[str, Any]) -> list[EvalFailure]:
     failures: list[EvalFailure] = []
     expected = case.get("expected", {})
-    message = active_message(case)
-    question_type = classify_question(message)
-    plot_suggestion = create_plot_suggestion(message, question_type)
-    should_visualize = plot_suggestion is not None
+    plan = plan_agent_turn(build_request(case))
+    plot_suggestion = plan.plot_suggestion_payload()
+    should_visualize = plan.needs_plot
 
     if should_visualize != expected.get("should_visualize"):
         failures.append(
@@ -103,7 +132,7 @@ def check_visual_case(case: dict[str, Any]) -> list[EvalFailure]:
             )
         )
 
-    actual_plot_type = plot_suggestion.get("plot_type") if plot_suggestion else None
+    actual_plot_type = plan.plot_type.value if plan.plot_type else None
     if actual_plot_type != expected.get("plot_type"):
         failures.append(
             EvalFailure(

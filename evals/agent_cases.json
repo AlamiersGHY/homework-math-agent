@@ -9,7 +9,8 @@
     "expected": {
       "question_type": "conceptual",
       "answer_mode": "guided",
-      "should_visualize": false
+      "should_visualize": false,
+      "needs_retrieval": true
     },
     "must": [
       "distinguish local pointwise continuity from global uniform control",
@@ -165,7 +166,9 @@
     "expected": {
       "question_type": "unknown",
       "answer_mode": "guided",
-      "should_visualize": false
+      "should_visualize": false,
+      "needs_clarification": true,
+      "memory_action": "record_weak_point"
     },
     "must": [
       "ask for a narrower topic or current problem",

@@ -1,3 +1,4 @@
+import json
 from collections.abc import AsyncIterator, Sequence
 
 from fastapi.testclient import TestClient
@@ -36,6 +37,12 @@ def test_chat_stream_returns_sse_events() -> None:
     assert "event: delta" in body
     assert "event: done" in body
     assert '"question_type": "computational"' in body
+    metadata = _first_event_data(body, "metadata")
+    assert metadata["question_type"] == "computational"
+    assert metadata["should_visualize"] is False
+    assert metadata["planner"]["question_type"] == metadata["question_type"]
+    assert metadata["planner"]["needs_plot"] == metadata["should_visualize"]
+    assert metadata["planner"]["needs_retrieval"] is False
 
 
 def test_chat_stream_includes_plot_suggestion_for_visualization_question() -> None:
@@ -53,6 +60,10 @@ def test_chat_stream_includes_plot_suggestion_for_visualization_question() -> No
     assert '"should_visualize": true' in body
     assert '"plot_type": "surface3d"' in body
     assert '"expression": "sin(x*y)"' in body
+    metadata = _first_event_data(body, "metadata")
+    assert metadata["planner"]["needs_plot"] is True
+    assert metadata["planner"]["plot_type"] == "surface3d"
+    assert metadata["planner"]["plot_suggestion"] == metadata["plot_suggestion"]
 
 
 def test_chat_stream_suggests_region_plot_for_simple_region_question() -> None:
@@ -133,6 +144,7 @@ def test_chat_stream_returns_sse_error_when_provider_is_unconfigured(
 
     assert response.status_code == 200
     assert "event: error" in body
+    assert '"planner": {' in body
     assert '"provider": "unconfigured"' in body
     assert '"finish_reason": "error"' in body
 
@@ -195,3 +207,14 @@ async def test_chat_service_maps_provider_failure_to_sse_error_event() -> None:
     assert '"code": "llm_provider_error"' in body
     assert '"provider": "failing"' in body
     assert '"finish_reason": "error"' in body
+
+
+def _first_event_data(body: str, event_name: str) -> dict:
+    event_marker = f"event: {event_name}"
+    for block in body.split("\n\n"):
+        if event_marker not in block:
+            continue
+        for line in block.splitlines():
+            if line.startswith("data:"):
+                return json.loads(line.removeprefix("data:").strip())
+    raise AssertionError(f"event {event_name} not found")

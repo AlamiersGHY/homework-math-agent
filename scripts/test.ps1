@@ -4,8 +4,9 @@ $ErrorActionPreference = "Stop"
 $repoRoot = Get-RepoRoot
 $apiPython = Get-ApiPython
 $apiRoot = Join-Path $repoRoot "apps\api"
-$pytestTemp = Join-Path $repoRoot ".cache\pytest"
-New-Item -ItemType Directory -Force -Path $pytestTemp | Out-Null
+$pytestRoot = Join-Path ([System.IO.Path]::GetTempPath()) "math-agent-pytest"
+$pytestTemp = Join-Path $pytestRoot ("run-{0}-{1}" -f $PID, (Get-Date -Format "yyyyMMddHHmmssfff"))
+New-Item -ItemType Directory -Force -Path $pytestRoot | Out-Null
 
 Invoke-LoggedCommand "Backend pytest" {
     Push-Location $apiRoot

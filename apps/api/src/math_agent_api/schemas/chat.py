@@ -2,6 +2,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+from math_agent_api.schemas.agent_policy import AgentPolicyPlan
 from math_agent_api.schemas.common import AnswerMode, QuestionType
 
 
@@ -28,6 +29,7 @@ class MetadataEvent(BaseModel):
     question_type: QuestionType
     should_visualize: bool
     plot_suggestion: dict[str, Any] | None = None
+    planner: AgentPolicyPlan | None = None
 
 
 class DeltaEvent(BaseModel):

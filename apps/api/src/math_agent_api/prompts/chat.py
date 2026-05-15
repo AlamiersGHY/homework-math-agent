@@ -10,13 +10,18 @@ def _mode_instruction(answer_mode: AnswerMode) -> str:
     return "用户选择 guided：分步引导，先指出思路和下一步，不要一次性写成长篇完整解答。"
 
 
-def build_chat_messages(request: ChatStreamRequest, question_type: QuestionType) -> list[dict[str, str]]:
+def build_chat_messages(
+    request: ChatStreamRequest,
+    question_type: QuestionType,
+    answer_mode: AnswerMode | None = None,
+) -> list[dict[str, str]]:
     problem = request.confirmed_ocr_text or request.message
+    resolved_mode = answer_mode or request.answer_mode
     system = "\n".join(
         [
             "你是一个面向工科本科数学分析学习者的学习 Agent。",
             "你的目标不是泛泛聊天，而是帮助用户理解数学分析中的概念、计算、证明和可视化问题。",
-            _mode_instruction(request.answer_mode),
+            _mode_instruction(resolved_mode),
             f"后端初步识别题型为 {question_type.value}，你可以参考但不要机械服从。",
             "数学表达必须使用 Markdown + LaTeX：行内公式一律写成 `$...$`，独立公式一律写成 `$$...$$`。",
             "不要输出裸露的 `\\frac`、`\\lim`、`\\sin` 等 LaTeX 命令；不要用 `[ ... ]` 包公式。",

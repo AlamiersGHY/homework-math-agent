@@ -53,6 +53,9 @@ const questionTypeLabels: Record<QuestionType, string> = {
   computational: "计算推导",
   proof: "证明思路",
   visualization: "图形直觉",
+  mixed: "混合问题",
+  ocr_derived: "图片题面",
+  off_topic: "范围外",
   unknown: "待判断"
 };
 

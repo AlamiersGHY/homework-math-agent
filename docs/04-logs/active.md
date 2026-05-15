@@ -6,7 +6,7 @@ Agentic RAG Prototype / Intelligent Course Assistant Prototype.
 
 ## Current Goal
 
-Integrate the next-stage Agentic RAG direction from `AGENTIC_RAG_HANDOFF.md` into the formal SDD, then deliver Phase 1: a structured planner service that emits machine-readable decisions for retrieval, plotting, clarification, answer mode, and memory action without requiring full PDF RAG yet.
+Phase 1 planner skeleton is implemented and release-validated. The planner now emits structured decisions for retrieval, plotting, clarification, answer mode, memory action, and reason while keeping full PDF RAG, citations, preferences, and memory writes out of this completion unit.
 
 ## Relevant Docs
 
@@ -70,7 +70,9 @@ Integrate the next-stage Agentic RAG direction from `AGENTIC_RAG_HANDOFF.md` int
 - `apps/api/src/math_agent_api/services/ocr_service.py`
 - `apps/api/src/math_agent_api/services/plot_service.py`
 - `apps/api/src/math_agent_api/services/session_service.py`
+- `apps/api/tests/test_agent_policy_planner.py`
 - `apps/api/tests/test_chat_stream.py`
+- `scripts/run_evals.py`
 - `docs/04-logs/tech-debt-tracker.md`
 - `scripts/README.md`
 - `scripts/browser-qa.ps1`
@@ -130,13 +132,15 @@ Integrate the next-stage Agentic RAG direction from `AGENTIC_RAG_HANDOFF.md` int
 - Browser QA coverage now checks fixed app-shell viewport fit, inline OCR, plot modal, plot history restore, and session deletion. Latest release validation passed on 2026-05-15 14:29 +08 with screenshots under `.cache/qa/20260515-142929`.
 - Agentic RAG Prototype direction has been accepted for the next stage through ADR-007.
 - Phase 1 will use a planner-driven explicit service pipeline through ADR-008; LangGraph remains out of scope.
+- Phase 1 planner skeleton is implemented as `agent_policy_planner` with a Pydantic `AgentPolicyPlan`.
+- Chat SSE metadata now keeps existing top-level `question_type`, `should_visualize`, and `plot_suggestion` fields while adding additive `planner` metadata.
+- Planner decisions are covered by unit tests and deterministic evals for concept retrieval intent, proof guidance, OCR-confirmed input, visualization, broad clarification, off-topic input, and bounded plot scope.
+- Frontend chat types now understand planner metadata and the expanded question-type enum; the UI still consumes the existing chat-first metadata surface rather than showing raw planner debug panels.
 
 ## Next Tasks
 
-- Implement `agent_policy_planner` v1 with deterministic structured output.
-- Add planner metadata to `POST /chat/stream` without removing existing `question_type`, `should_visualize`, or `plot_suggestion`.
-- Add planner unit tests and eval coverage for concept, proof, computation, visualization, OCR-derived, off-topic, and clarification cases.
-- Run `.\scripts\check.ps1` after planner implementation; run `.\scripts\release-check.ps1` before checkpointing the implementation unit.
+- Create a local Git checkpoint for the planner implementation unit.
+- Before starting Phase 4.2 PDF ingestion/retrieval, add or update a retrieval/citation strategy ADR covering PDF parsing, chunk metadata, retrieval method, citation safety, and dependency choices.
 - Defer live Doubao OCR smoke until the configured `DOUBAO_VISION_MODEL` points to an accessible Ark endpoint.
 
 ## Blockers
@@ -146,6 +150,8 @@ Integrate the next-stage Agentic RAG direction from `AGENTIC_RAG_HANDOFF.md` int
 - Mathpix is not the active OCR provider because the user does not accept its current setup/billing requirement for this MVP; keep it as a future adapter path only.
 - `npm audit` still reports 2 moderate findings through the current Next/PostCSS dependency chain; do not run `npm audit fix --force` without a release dependency review.
 - PDF ingestion, retrieval, citations, preferences, and memory are accepted next-stage scope but not part of Phase 1 planner completion.
+- `.\scripts\check.ps1` passed on 2026-05-15 15:19 +08 after moving pytest temporary directories to the system temp path to avoid Windows cache-directory permission locks.
+- `.\scripts\release-check.ps1` passed on 2026-05-15 15:20 +08: backend pytest, deterministic evals, frontend typecheck/build, mock API smoke, browser QA, and dependency audit advisory completed.
 
 ## Exit Checklist
 

@@ -5,6 +5,9 @@ export type QuestionType =
   | "computational"
   | "proof"
   | "visualization"
+  | "mixed"
+  | "ocr_derived"
+  | "off_topic"
   | "unknown";
 
 export type PlotType = "function2d" | "surface3d" | "region2d";
@@ -46,6 +49,21 @@ export type MetadataEventData = {
   question_type: QuestionType;
   should_visualize: boolean;
   plot_suggestion: PlotPreviewRequest | null;
+  planner?: AgentPolicyPlan | null;
+};
+
+export type AgentPolicyPlan = {
+  question_type: QuestionType;
+  needs_retrieval: boolean;
+  needs_plot: boolean;
+  needs_clarification: boolean;
+  answer_mode: AnswerMode;
+  retrieval_scope: "none" | "uploaded_course_materials";
+  plot_type: PlotType | null;
+  plot_suggestion: PlotPreviewRequest | null;
+  memory_action: "none" | "record_weak_point" | "record_preference";
+  input_source: "text" | "ocr";
+  reason: string;
 };
 
 export type DeltaEventData = {

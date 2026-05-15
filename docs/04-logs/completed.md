@@ -171,3 +171,12 @@
 - Added message-level Plotly rendering with a larger modal view for 2D/3D/region plots.
 - Expanded browser QA to cover app-shell viewport fit, inline OCR, plot modal, history plot restore, and session deletion.
 - Verified `.\scripts\release-check.ps1` on 2026-05-15 14:29 +08: backend pytest, evals, frontend typecheck/build, mock API smoke, browser QA, and dependency audit advisory completed.
+
+## Agentic RAG SDD Direction And Planner Skeleton
+
+- Accepted the Agentic RAG Prototype / Intelligent Course Assistant Prototype direction through `ADR-007` and `ADR-008`.
+- Added a structured planner service and Pydantic `AgentPolicyPlan` for question type, retrieval intent, plot intent, clarification, answer mode, memory action, and reason.
+- Kept chat SSE metadata backward-compatible by preserving `question_type`, `should_visualize`, and `plot_suggestion` while adding additive `planner` metadata.
+- Updated deterministic evals and backend tests so planner behavior is checked for concept, proof, computation, OCR-confirmed, visualization, broad clarification, off-topic, and citation-safety-adjacent cases.
+- Verified `.\scripts\check.ps1` on 2026-05-15 15:19 +08: backend pytest, deterministic evals, frontend typecheck, and frontend production build passed.
+- Verified `.\scripts\release-check.ps1` on 2026-05-15 15:20 +08: backend pytest, deterministic evals, frontend typecheck/build, mock API smoke, browser QA, and dependency audit advisory completed.
