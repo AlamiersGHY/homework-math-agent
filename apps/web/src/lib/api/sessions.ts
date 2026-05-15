@@ -16,3 +16,12 @@ export async function getSession(sessionId: string): Promise<SessionDetail> {
   }
   return (await response.json()) as SessionDetail;
 }
+
+export async function deleteSession(sessionId: string): Promise<void> {
+  const response = await fetch(`${API_BASE_URL}/sessions/${encodeURIComponent(sessionId)}`, {
+    method: "DELETE"
+  });
+  if (!response.ok) {
+    throw new Error(`Session delete failed with ${response.status}`);
+  }
+}

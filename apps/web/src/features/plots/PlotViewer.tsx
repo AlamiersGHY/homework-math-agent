@@ -13,8 +13,19 @@ type PlotlyModule = {
   purge: (element: HTMLDivElement) => void;
 };
 
-export function PlotViewer({ plot }: { plot: PlotPreviewResponse }) {
+export function PlotViewer({
+  className = "",
+  onExpand,
+  plot,
+  size = "inline"
+}: {
+  className?: string;
+  onExpand?: () => void;
+  plot: PlotPreviewResponse;
+  size?: "inline" | "modal";
+}) {
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const heightClass = size === "modal" ? "h-[62vh] min-h-[420px]" : "h-[280px] sm:h-[380px]";
 
   useEffect(() => {
     let cancelled = false;
@@ -58,15 +69,26 @@ export function PlotViewer({ plot }: { plot: PlotPreviewResponse }) {
   }, [plot]);
 
   return (
-    <section className="overflow-hidden rounded-lg border border-neutral-200 bg-white shadow-sm">
+    <section className={`overflow-hidden rounded-lg border border-neutral-200 bg-white shadow-sm ${className}`}>
       <div className="flex flex-col gap-1 border-b border-neutral-100 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <p className="text-sm font-semibold text-neutral-950">可视化图形</p>
           <p className="text-xs text-neutral-500">{getPlotTypeLabel(plot.plot_type)}</p>
         </div>
-        <span className="text-xs font-medium text-neutral-500">可拖拽、缩放查看</span>
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-medium text-neutral-500">可拖拽、缩放查看</span>
+          {onExpand ? (
+            <button
+              className="h-8 rounded-md border border-neutral-200 px-3 text-xs font-semibold text-neutral-700 transition hover:border-emerald-300 hover:text-emerald-800"
+              onClick={onExpand}
+              type="button"
+            >
+              放大
+            </button>
+          ) : null}
+        </div>
       </div>
-      <div ref={containerRef} className="h-[340px] w-full sm:h-[460px]" />
+      <div ref={containerRef} className={`${heightClass} w-full`} />
       <p className="border-t border-neutral-100 px-4 py-3 text-sm leading-6 text-neutral-700">
         {plot.explanation}
       </p>

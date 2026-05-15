@@ -17,6 +17,9 @@ export type ChatMessage = {
   content: string;
   status?: "streaming" | "done" | "error";
   plotSuggestion?: PlotPreviewRequest | null;
+  plot?: PlotPreviewResponse | null;
+  plotLoading?: boolean;
+  plotError?: string | null;
 };
 
 export type ChatStreamRequest = {
@@ -36,6 +39,7 @@ export type ChatStreamRequest = {
 export type StartEventData = {
   session_id: string;
   answer_mode: AnswerMode;
+  user_message_id?: string | null;
 };
 
 export type MetadataEventData = {
@@ -50,6 +54,7 @@ export type DeltaEventData = {
 
 export type DoneEventData = {
   finish_reason: string;
+  assistant_message_id?: string | null;
 };
 
 export type ErrorEventData = {
@@ -108,6 +113,8 @@ export type PlotPreviewRequest = {
   variables: string[];
   ranges: Record<string, [number, number]>;
   source?: string;
+  session_id?: string | null;
+  message_id?: string | null;
 };
 
 export type PlotPreviewResponse = {
