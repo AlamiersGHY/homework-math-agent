@@ -59,6 +59,18 @@ docs
 
 后端 route handler 只负责请求解析、调用 service 和响应转换；业务逻辑不得堆在 route handler 中。
 
+### Agentic RAG Prototype Services
+
+进入 Agentic RAG Prototype 后，后端会在现有 service pipeline 内逐步增加：
+
+- `agent_policy_planner`：生成结构化 planner 决策。
+- `document_service`：管理本地上传材料和文本提取状态。
+- `retrieval_service`：检索课程材料 chunk。
+- `profile_service`：管理本地偏好。
+- `memory_service`：管理有边界的轻量学习记忆。
+
+这些能力仍应保持 route -> schema -> service -> provider/db 的分层，不应写入前端组件或 route handler。
+
 ### SQLite
 
 SQLite 是 MVP 可用的轻量持久化方案，可用于：
@@ -85,7 +97,7 @@ Provider 不应写死在 UI、route handler 或核心 prompt 中。MVP 可以先
 
 MVP 使用显式 service pipeline，不使用 LangGraph 或重型多 Agent 编排。
 
-推荐流程：
+MVP 推荐流程：
 
 ```text
 input
@@ -100,6 +112,23 @@ input
 ```
 
 这条 pipeline 应保持普通 Python service 可读、可测试。只有当分支、状态回退和工具调用复杂到 service pipeline 难以维护时，才通过 ADR 重新评估 LangGraph。
+
+Agentic RAG Prototype 推荐流程：
+
+```text
+input
+-> load session/profile context
+-> structured planner
+-> optional retrieval
+-> optional plot preview
+-> optional clarification-first response
+-> answer prompt with retrieved context/citations
+-> stream answer
+-> emit metadata / citations / artifacts
+-> persist session and bounded memory updates
+```
+
+Phase 1 只实现 structured planner metadata，不要求完整 PDF RAG 或自动工具执行。
 
 ## 核心数据流
 

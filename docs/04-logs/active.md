@@ -2,11 +2,11 @@
 
 ## Current Phase
 
-Full MVP demo completion.
+Agentic RAG Prototype / Intelligent Course Assistant Prototype.
 
 ## Current Goal
 
-Turn the current chat-only slice into a cohesive local MVP demo with chat, answer-mode control, lightweight session history, OCR input confirmation, Plotly-style 2D/3D visualization, automated checks, and release-ready demo documentation.
+Integrate the next-stage Agentic RAG direction from `AGENTIC_RAG_HANDOFF.md` into the formal SDD, then deliver Phase 1: a structured planner service that emits machine-readable decisions for retrieval, plotting, clarification, answer mode, and memory action without requiring full PDF RAG yet.
 
 ## Relevant Docs
 
@@ -26,6 +26,8 @@ Turn the current chat-only slice into a cohesive local MVP demo with chat, answe
 - `docs/03-decisions/ADR-004-planning-workflow.md`
 - `docs/03-decisions/ADR-005-git-checkpoint-workflow.md`
 - `docs/03-decisions/ADR-006-ocr-provider-strategy.md`
+- `docs/03-decisions/ADR-007-agentic-rag-prototype.md`
+- `docs/03-decisions/ADR-008-planner-driven-service-pipeline.md`
 - `docs/03-decisions/README.md`
 - `docs/02-workflow/planning-workflow.md`
 - `docs/02-workflow/definition-of-done.md`
@@ -35,6 +37,7 @@ Turn the current chat-only slice into a cohesive local MVP demo with chat, answe
 - `evals/README.md`
 - `evals/agent_cases.json`
 - `evals/visual_cases.json`
+- `AGENTIC_RAG_HANDOFF.md`
 - `apps/README.md`
 - `apps/web/README.md`
 - `apps/web/package.json`
@@ -61,6 +64,8 @@ Turn the current chat-only slice into a cohesive local MVP demo with chat, answe
 - `apps/api/src/math_agent_api/routers/sessions.py`
 - `apps/api/src/math_agent_api/schemas/chat.py`
 - `apps/api/src/math_agent_api/schemas/plots.py`
+- `apps/api/src/math_agent_api/schemas/agent_policy.py`
+- `apps/api/src/math_agent_api/services/agent_policy_planner.py`
 - `apps/api/src/math_agent_api/services/chat_service.py`
 - `apps/api/src/math_agent_api/services/ocr_service.py`
 - `apps/api/src/math_agent_api/services/plot_service.py`
@@ -96,7 +101,7 @@ Turn the current chat-only slice into a cohesive local MVP demo with chat, answe
 - User feedback exposed poor formula rendering from bare LaTeX output; frontend now normalizes common bare LaTeX patterns before Markdown rendering.
 - Backend prompt now explicitly requires renderable Markdown LaTeX delimiters for formulas.
 - Current work has been reset from Phase 1 closure to full MVP demo completion.
-- Product runtime remains the accepted lightweight service pipeline: no LangGraph, no RAG, no login/account system for this demo.
+- The completed MVP demo runtime remained a lightweight service pipeline: no LangGraph, no RAG, no login/account system for that demo baseline.
 - OCR strategy is Doubao-first for the real provider, mock-first for automated development and tests, with Mathpix kept as the future professional OCR adapter.
 - Session history is accepted as local SQLite-backed demo persistence only.
 - UI direction is a productized learning workspace: left session rail, central chat/learning area, text/image input modes, inline OCR confirmation, and inline plot viewer. Backend/debug metadata should not be exposed as normal user-facing UI.
@@ -123,13 +128,16 @@ Turn the current chat-only slice into a cohesive local MVP demo with chat, answe
 - The frontend now treats image upload as an inline composer attachment: OCR text is copied into the normal input area for user editing and still requires an explicit send.
 - Plot rendering now lives inside the relevant assistant message and includes a larger modal view for detailed inspection.
 - Browser QA coverage now checks fixed app-shell viewport fit, inline OCR, plot modal, plot history restore, and session deletion. Latest release validation passed on 2026-05-15 14:29 +08 with screenshots under `.cache/qa/20260515-142929`.
+- Agentic RAG Prototype direction has been accepted for the next stage through ADR-007.
+- Phase 1 will use a planner-driven explicit service pipeline through ADR-008; LangGraph remains out of scope.
 
 ## Next Tasks
 
-- Run live Doubao OCR smoke after the user adds Doubao credentials.
-- Review real model outputs for prompt/LaTeX quality in direct/guided/hint modes.
-- Keep running backend tests, frontend typecheck/build, API smoke checks, and browser verification for each completed unit.
-- Continue reviewing the UI on real user-sized browser windows after further feedback, especially dense history lists and long formula-heavy conversations.
+- Implement `agent_policy_planner` v1 with deterministic structured output.
+- Add planner metadata to `POST /chat/stream` without removing existing `question_type`, `should_visualize`, or `plot_suggestion`.
+- Add planner unit tests and eval coverage for concept, proof, computation, visualization, OCR-derived, off-topic, and clarification cases.
+- Run `.\scripts\check.ps1` after planner implementation; run `.\scripts\release-check.ps1` before checkpointing the implementation unit.
+- Defer live Doubao OCR smoke until the configured `DOUBAO_VISION_MODEL` points to an accessible Ark endpoint.
 
 ## Blockers
 
@@ -137,6 +145,7 @@ Turn the current chat-only slice into a cohesive local MVP demo with chat, answe
 - Doubao OCR live smoke additionally requires a vision-capable model or endpoint id in `DOUBAO_VISION_MODEL`.
 - Mathpix is not the active OCR provider because the user does not accept its current setup/billing requirement for this MVP; keep it as a future adapter path only.
 - `npm audit` still reports 2 moderate findings through the current Next/PostCSS dependency chain; do not run `npm audit fix --force` without a release dependency review.
+- PDF ingestion, retrieval, citations, preferences, and memory are accepted next-stage scope but not part of Phase 1 planner completion.
 
 ## Exit Checklist
 
@@ -150,9 +159,11 @@ Turn the current chat-only slice into a cohesive local MVP demo with chat, answe
 - Session deletion must remain local-only and must remove the session's messages/artifacts without introducing account semantics.
 - Message IDs from SSE are opaque frontend identifiers; UI code should not parse their format except when passing them back as optional artifact links.
 - Session persistence must remain local/lightweight and must not introduce accounts, login, permissions, or cross-device sync.
+- Planner metadata must be additive; existing frontend-visible chat metadata fields must remain compatible.
+- Planner output must be Pydantic-validated and have deterministic fallback behavior.
+- Retrieval/citation features must never fabricate document names, pages, sections, or chunk metadata.
+- The UI must remain chat-first and must not become a manual tool workbench.
 - User-facing UI should show learning state and next actions, not raw provider/session/debug internals.
 - Before finalizing a coding task, run the relevant app-local tests or explain what could not be verified.
 - Release validation should use `.\scripts\release-check.ps1`; pass `-LiveLLM` only when real LLM credentials are locally configured.
 - After completing a coherent deliverable unit, create a local Git checkpoint commit unless blocked by unrelated changes or explicit user instruction.
-- `apps/api/tests/test_plots.py`
-- `apps/api/tests/test_sessions.py`

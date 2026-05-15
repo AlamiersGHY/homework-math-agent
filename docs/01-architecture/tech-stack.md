@@ -48,7 +48,18 @@
 | OCR | OCR provider interface | 可先 mock 或低成本 provider，后续替换 Mathpix 等专业服务。 |
 | Plot | Plot service/provider | 后端生成或整理 Plotly 风格 spec，前端负责渲染。 |
 | Retrieval | Lightweight retrieval provider | 仅作为可选增强，不做完整 RAG 平台。 |
+| Planner | Pydantic structured planner service | Agentic RAG Phase 1 使用显式 service pipeline，不引入 LangGraph。 |
 | Evals | JSON cases under `evals/` | Agent 行为变更必须维护 eval cases。 |
+
+## Agentic RAG Prototype Additions
+
+Agentic RAG 阶段允许后续引入：
+
+- PDF/text extraction dependency，用于本地课程材料解析。
+- Embedding provider interface，用于 local/hybrid retrieval。
+- SQLite document/chunk/profile/memory tables。
+
+引入具体 PDF parsing、embedding、reranking 或迁移工具前，必须更新本文档并按需要新增 ADR。
 
 ## API And Streaming
 
@@ -64,7 +75,7 @@
 以下不是 MVP 默认技术栈：
 
 - LangGraph。
-- 完整 RAG / ChromaDB。
+- ChromaDB 或其他向量数据库作为默认依赖。
 - shadcn/ui。
 - pnpm / uv。
 - Alembic。

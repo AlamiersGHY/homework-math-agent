@@ -70,6 +70,9 @@ API tests 应检查：
 - 直接解答是否足够明确。
 - 是否应触发可视化。
 - 是否编造引用来源。
+- Planner 是否产生正确的结构化决策。
+- Retrieval/citation 是否只引用真实 chunk。
+- Preferences/memory 是否有边界地影响回答。
 
 Evals 存放在 `evals/`，不替代 unit/API tests。
 
@@ -82,6 +85,9 @@ Evals 存放在 `evals/`，不替代 unit/API tests。
 - 改后端 API：运行相关 API tests。
 - 改 SSE：检查 SSE event shape。
 - 改 Agent 行为：更新并运行相关 evals；runner 不存在时至少更新 eval cases。
+- 改 planner：运行 planner unit tests 和 deterministic evals，确认 metadata 旧字段兼容。
+- 改 RAG/citation：运行 ingestion/retrieval API tests、citation safety evals，并验证空检索不编造来源。
+- 改 preferences/memory：运行 profile/memory tests，确认无关输入不会产生长期记忆污染。
 - 改前端 UI：运行类型检查/构建；重要界面做浏览器检查。
 - 改依赖或目录结构：检查相关 docs 和 ADR。
 
@@ -105,6 +111,8 @@ Evals 存放在 `evals/`，不替代 unit/API tests。
 - OCR mock provider test。
 - plot preview deterministic test。
 - agent eval cases runner。
+- planner eval cases runner.
+- citation safety eval cases once retrieval is implemented.
 - 前端 smoke check。
 
 ## 无法验证时

@@ -25,6 +25,9 @@
 - `computational`：计算类。
 - `proof`：证明类。
 - `visualization`：可视化类。
+- `mixed`：混合型问题，可能同时需要证明、计算、检索或可视化。
+- `ocr_derived`：由用户确认后的 OCR 文本形成的问题。
+- `off_topic`：明显偏离数学学习助手范围的问题。
 - `unknown`：无法明确判断。
 
 ### PlotType
@@ -103,7 +106,7 @@ event: start
 data: {"session_id":"...","answer_mode":"guided","user_message_id":"msg-..."}
 
 event: metadata
-data: {"question_type":"computational","should_visualize":false}
+data: {"question_type":"computational","should_visualize":false,"planner":{...}}
 
 event: delta
 data: {"text":"先观察这个极限..."}
@@ -127,8 +130,34 @@ data: {"code":"llm_provider_error","message":"LLM provider failed","details":{}}
 - `delta` 可以出现多次。
 - `metadata` 可以在流开始或结束前出现多次。
 - `user_message_id` 和 `assistant_message_id` 是本地持久化消息 ID，前端只把它们当作 opaque id，用于把临时消息替换成可恢复的历史消息，并关联后续 plot artifact。
+- `planner` 是可选的结构化 agent policy plan。它是 additive metadata；现有 `question_type`、`should_visualize`、`plot_suggestion` 顶层字段必须继续保留，避免破坏前端兼容。
 - 如果需要可视化，`metadata.plot_suggestion` 可给出 plot preview 的建议参数，但真正图形生成走 `/plots/preview`。
 - 实现阶段可保留普通 JSON debug endpoint，但正式聊天契约以 SSE 为主。
+
+### Planner Metadata
+
+Phase 1 planner metadata 形态：
+
+```json
+{
+  "question_type": "visualization",
+  "needs_retrieval": true,
+  "needs_plot": true,
+  "needs_clarification": false,
+  "answer_mode": "guided",
+  "retrieval_scope": "uploaded_course_materials",
+  "plot_type": "surface3d",
+  "memory_action": "none",
+  "reason": "The question asks about a surface and may benefit from course context."
+}
+```
+
+约定：
+
+- Planner 输出必须可由 Pydantic schema 验证。
+- Planner 失败时必须有 deterministic fallback，不得中断 chat stream。
+- `reason` 面向开发和简短 agent-decision hints，不应暴露 provider 或调试细节。
+- `needs_retrieval=true` 不代表当前一定有资料可引用；后续 retrieval 阶段必须避免伪造 citation。
 
 ## GET /sessions
 
@@ -266,7 +295,13 @@ data: {"code":"llm_provider_error","message":"LLM provider failed","details":{}}
 
 以下接口不属于第一版必需契约，后续做轻量 RAG 或题库时再补充：
 
+- `POST /documents/upload`
+- `GET /documents`
+- `DELETE /documents/{id}`
+- `POST /documents/{id}/reindex`
 - `POST /retrieval/search`
+- `GET /profile`
+- `POST /profile`
 - `GET /examples`
 - `GET /knowledge/{id}`
 

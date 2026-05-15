@@ -37,6 +37,9 @@ This file is the routing guide for project documentation. It helps humans and AI
 - `03-decisions/ADR-003-tech-stack.md`: MVP tech stack decision for npm, venv/pip, Tailwind local components, fetch stream, and SQLAlchemy lightweight use.
 - `03-decisions/ADR-004-planning-workflow.md`: planning workflow decision for fuzzy requirements, solution cards, and active/completed/ADR boundaries.
 - `03-decisions/ADR-005-git-checkpoint-workflow.md`: Git checkpoint decision for auto-committing complete deliverable units.
+- `03-decisions/ADR-006-ocr-provider-strategy.md`: OCR provider decision for mock-first testing, Doubao live OCR, and future Mathpix.
+- `03-decisions/ADR-007-agentic-rag-prototype.md`: accepted direction for the Agentic RAG / intelligent course assistant prototype.
+- `03-decisions/ADR-008-planner-driven-service-pipeline.md`: planner-driven explicit service pipeline decision for Phase 1.
 
 ## Logs
 

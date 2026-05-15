@@ -14,6 +14,8 @@ Accepted ADRs are binding until a later ADR explicitly supersedes them. Do not s
 | `ADR-004-planning-workflow.md` | accepted | Planning Workflow | Fuzzy requirement planning, solution-card output, active/completed/ADR boundaries |
 | `ADR-005-git-checkpoint-workflow.md` | accepted | Git Checkpoint Workflow | Auto-commit complete deliverable units after verification and SDD sync |
 | `ADR-006-ocr-provider-strategy.md` | accepted | OCR Provider Strategy | Mock-first tests, Doubao Vision preferred live MVP OCR, Mathpix future adapter |
+| `ADR-007-agentic-rag-prototype.md` | accepted | Agentic RAG Prototype Direction | Chat-first course assistant stage, structured planner, local RAG, citations, preferences, memory |
+| `ADR-008-planner-driven-service-pipeline.md` | accepted | Planner-Driven Explicit Service Pipeline | Pydantic planner service drives metadata and future tools without LangGraph in Phase 1 |
 
 ## When To Add An ADR
 
