@@ -206,7 +206,7 @@ async def stream_chat_with_provider(
     active_message = request.confirmed_ocr_text or request.message
     plot_suggestion = create_plot_suggestion(active_message, question_type)
     ensure_session(db, session_id, default_answer_mode=request.answer_mode)
-    append_message(
+    user_record = append_message(
         db,
         session_id=session_id,
         role="user",
@@ -218,7 +218,11 @@ async def stream_chat_with_provider(
 
     yield format_sse(
         "start",
-        StartEvent(session_id=session_id, answer_mode=request.answer_mode).model_dump(mode="json"),
+        StartEvent(
+            session_id=session_id,
+            answer_mode=request.answer_mode,
+            user_message_id=user_record.id if user_record else None,
+        ).model_dump(mode="json"),
     )
 
     yield format_sse(
@@ -236,7 +240,7 @@ async def stream_chat_with_provider(
         async for chunk in provider.stream_chat(messages):
             answer_parts.append(chunk)
             yield format_sse("delta", DeltaEvent(text=chunk).model_dump(mode="json"))
-        append_message(
+        assistant_record = append_message(
             db,
             session_id=session_id,
             role="assistant",
@@ -245,7 +249,12 @@ async def stream_chat_with_provider(
             question_type=question_type,
             source=getattr(provider, "name", "unknown"),
         )
-        yield format_sse("done", DoneEvent().model_dump(mode="json"))
+        yield format_sse(
+            "done",
+            DoneEvent(
+                assistant_message_id=assistant_record.id if assistant_record else None
+            ).model_dump(mode="json"),
+        )
     except LLMProviderError:
         async for event in stream_chat_error_tail(getattr(provider, "name", "unknown")):
             yield event

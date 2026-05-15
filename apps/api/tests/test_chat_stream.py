@@ -134,7 +134,7 @@ def test_chat_stream_returns_sse_error_when_provider_is_unconfigured(
     assert response.status_code == 200
     assert "event: error" in body
     assert '"provider": "unconfigured"' in body
-    assert 'data: {"finish_reason": "error"}' in body
+    assert '"finish_reason": "error"' in body
 
 
 class FakeProvider:
@@ -165,7 +165,7 @@ async def test_chat_service_maps_provider_chunks_to_sse_delta_events() -> None:
     assert "event: metadata" in body
     assert 'data: {"text": "第一段"}' in body
     assert 'data: {"text": "第二段"}' in body
-    assert 'data: {"finish_reason": "stop"}' in body
+    assert '"finish_reason": "stop"' in body
 
 
 class FailingProvider:
@@ -194,4 +194,4 @@ async def test_chat_service_maps_provider_failure_to_sse_error_event() -> None:
     assert "event: error" in body
     assert '"code": "llm_provider_error"' in body
     assert '"provider": "failing"' in body
-    assert 'data: {"finish_reason": "error"}' in body
+    assert '"finish_reason": "error"' in body

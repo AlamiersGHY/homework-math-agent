@@ -18,6 +18,14 @@ class SessionRepository:
         statement = select(SessionRecord).order_by(SessionRecord.updated_at.desc()).limit(limit)
         return self.db.scalars(statement).all()
 
+    def delete_session(self, session_id: str) -> bool:
+        record = self.get_session(session_id)
+        if not record:
+            return False
+        self.db.delete(record)
+        self.db.commit()
+        return True
+
     def create_session(
         self,
         session_id: str,

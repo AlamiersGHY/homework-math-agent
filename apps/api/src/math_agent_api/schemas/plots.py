@@ -11,6 +11,8 @@ class PlotPreviewRequest(BaseModel):
     variables: list[str]
     ranges: dict[str, tuple[float, float]]
     source: str = "user"
+    session_id: str | None = None
+    message_id: str | None = None
 
 
 class PlotPreviewResponse(BaseModel):

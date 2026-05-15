@@ -69,6 +69,30 @@ def get_session_detail(db: Session, session_id: str) -> SessionDetail | None:
     )
 
 
+def delete_session(db: Session, session_id: str) -> bool:
+    return SessionRepository(db).delete_session(session_id)
+
+
+def append_artifact(
+    db: Session | None,
+    session_id: str | None,
+    artifact_type: str,
+    payload: dict,
+    message_id: str | None = None,
+) -> ArtifactRecord | None:
+    if db is None or not session_id:
+        return None
+    repo = SessionRepository(db)
+    if not repo.get_session(session_id):
+        return None
+    return repo.add_artifact(
+        session_id=session_id,
+        artifact_type=artifact_type,
+        payload=payload,
+        message_id=message_id,
+    )
+
+
 def _session_summary(record: SessionRecord) -> SessionSummary:
     return SessionSummary(
         id=record.id,

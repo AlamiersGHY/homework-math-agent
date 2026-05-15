@@ -63,7 +63,7 @@ async def test_chat_stream_persists_session_messages(isolated_database) -> None:
             )
         ]
 
-    assert 'data: {"finish_reason": "stop"}' in "".join(events)
+    assert '"finish_reason": "stop"' in "".join(events)
 
     client = TestClient(app)
     response = client.get("/sessions/session-test")
@@ -81,5 +81,53 @@ def test_unknown_session_returns_404(isolated_database) -> None:
     client = TestClient(app)
 
     response = client.get("/sessions/missing")
+
+    assert response.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_delete_session_removes_session_messages_and_artifacts(isolated_database) -> None:
+    request = ChatStreamRequest(message="画一下 z = sin(x*y) 的三维曲面", answer_mode="direct")
+
+    with isolated_database.SessionLocal() as db:
+        [
+            event
+            async for event in stream_chat_with_provider(
+                request=request,
+                session_id="session-delete",
+                question_type=QuestionType.VISUALIZATION,
+                provider=ShortProvider(),
+                db=db,
+            )
+        ]
+
+    client = TestClient(app)
+    plot_response = client.post(
+        "/plots/preview",
+        json={
+            "plot_type": "surface3d",
+            "expression": "sin(x*y)",
+            "variables": ["x", "y"],
+            "ranges": {"x": [-3, 3], "y": [-3, 3]},
+            "session_id": "session-delete",
+        },
+    )
+    assert plot_response.status_code == 200
+
+    detail_response = client.get("/sessions/session-delete")
+    assert detail_response.status_code == 200
+    assert len(detail_response.json()["messages"]) == 2
+    assert len(detail_response.json()["artifacts"]) == 1
+
+    delete_response = client.delete("/sessions/session-delete")
+    assert delete_response.status_code == 204
+
+    assert client.get("/sessions/session-delete").status_code == 404
+
+
+def test_delete_unknown_session_returns_404(isolated_database) -> None:
+    client = TestClient(app)
+
+    response = client.delete("/sessions/missing")
 
     assert response.status_code == 404

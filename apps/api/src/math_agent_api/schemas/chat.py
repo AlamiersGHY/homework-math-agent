@@ -21,6 +21,7 @@ class ChatStreamRequest(BaseModel):
 class StartEvent(BaseModel):
     session_id: str
     answer_mode: AnswerMode
+    user_message_id: str | None = None
 
 
 class MetadataEvent(BaseModel):
@@ -35,3 +36,4 @@ class DeltaEvent(BaseModel):
 
 class DoneEvent(BaseModel):
     finish_reason: str = "stop"
+    assistant_message_id: str | None = None
