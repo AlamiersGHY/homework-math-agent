@@ -220,7 +220,10 @@ def _create_implicit3d(request: PlotPreviewRequest) -> PlotPreviewResponse:
                 x_values.append(x)
                 y_values.append(y)
                 z_values.append(z)
-                scalar_values.append(_safe_eval(evaluator, {x_name: x, y_name: y, z_name: z}))
+                value = _safe_eval(evaluator, {x_name: x, y_name: y, z_name: z})
+                scalar_values.append(None if value is None else round(value - level, 6))
+    valid_values = [value for value in scalar_values if value is not None]
+    band = _iso_band(valid_values)
     spec = {
         "data": [
             {
@@ -229,8 +232,8 @@ def _create_implicit3d(request: PlotPreviewRequest) -> PlotPreviewResponse:
                 "y": y_values,
                 "z": z_values,
                 "value": scalar_values,
-                "isomin": level,
-                "isomax": level,
+                "isomin": -band,
+                "isomax": band,
                 "surface": {"count": 1},
                 "caps": {
                     "x": {"show": False},
@@ -258,7 +261,10 @@ def _create_implicit3d(request: PlotPreviewRequest) -> PlotPreviewResponse:
     return PlotPreviewResponse(
         plot_type=PlotType.IMPLICIT3D,
         spec=spec,
-        explanation=f"Implicit surface preview for ${request.expression}$ using a Plotly isosurface.",
+        explanation=(
+            f"Implicit surface preview for ${request.expression}$ using the zero level set "
+            f"of {expression} - ({level:g})."
+        ),
     )
 
 
@@ -292,6 +298,18 @@ def _get_valid_range(ranges: dict[str, tuple[float, float]], variable: str) -> t
 def _linspace(start: float, end: float, count: int) -> list[float]:
     step = (end - start) / (count - 1)
     return [round(start + step * index, 6) for index in range(count)]
+
+
+def _iso_band(values: list[float]) -> float:
+    if not values:
+        raise PlotValidationError("Implicit surface sampling did not produce finite values.")
+    min_value = min(values)
+    max_value = max(values)
+    if min_value > 0 or max_value < 0:
+        raise PlotValidationError("Implicit surface level is outside the sampled range.")
+    span = max_value - min_value
+    band = max(span * 0.002, 1e-4)
+    return round(band, 6)
 
 
 def _compile_expression(expression: str, variables: set[str]):

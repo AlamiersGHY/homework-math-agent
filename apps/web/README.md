@@ -14,6 +14,16 @@ npm install
 npm run dev
 ```
 
+If you start the web app directly from `apps/web`, copy `.env.example` to `.env.local`
+or set this environment variable before running Next:
+
+```env
+NEXT_PUBLIC_API_BASE_URL=http://127.0.0.1:8000
+```
+
+PDF material upload, retrieval, sessions, OCR, and plot preview all use the same
+FastAPI base URL. There is no separate PDF API key or frontend secret.
+
 From the repository root, the preferred local demo entry is:
 
 ```powershell
@@ -21,6 +31,8 @@ From the repository root, the preferred local demo entry is:
 ```
 
 It starts the FastAPI backend and the Next.js frontend together and points the web app at the local API.
+If you change the API port for a production build/start flow, rebuild the web app so the
+`NEXT_PUBLIC_API_BASE_URL` value is embedded correctly.
 
 ## Build
 
@@ -40,7 +52,7 @@ Current frontend provides:
 - History replay for retrieved-source metadata, plot suggestions, and generated plots.
 - OCR image upload with editable recognition confirmation before chat.
 - Plotly-backed plot preview rendering for chat visualization suggestions.
-  - Supported demo plots include 2D functions, simple 3D `z=f(x,y)` surfaces, and bounded 2D regions supplied by the backend.
+  - Supported demo plots include 2D functions, simple 3D `z=f(x,y)` surfaces, bounded 2D regions, and MVP implicit 3D surfaces such as `x^4 + y^4 + z^4 = 1` supplied by the backend.
 
 ## Browser QA
 

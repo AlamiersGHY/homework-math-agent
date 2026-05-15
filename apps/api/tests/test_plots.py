@@ -85,10 +85,15 @@ def test_plot_preview_implicit3d_returns_plotly_isosurface() -> None:
     assert response.status_code == 200
     assert payload["plot_type"] == "implicit3d"
     assert payload["renderer"] == "plotly"
-    assert payload["spec"]["data"][0]["type"] == "isosurface"
-    assert payload["spec"]["data"][0]["isomin"] == 1
-    assert payload["spec"]["data"][0]["isomax"] == 1
-    assert len(payload["spec"]["data"][0]["value"]) == 35 * 35 * 35
+    trace = payload["spec"]["data"][0]
+    values = trace["value"]
+    assert trace["type"] == "isosurface"
+    assert trace["isomin"] < 0
+    assert trace["isomax"] > 0
+    assert trace["isomin"] < trace["isomax"]
+    assert len(values) == 35 * 35 * 35
+    assert min(value for value in values if value is not None) < 0
+    assert max(value for value in values if value is not None) > 0
 
 
 def test_plot_preview_region2d_returns_plotly_region() -> None:

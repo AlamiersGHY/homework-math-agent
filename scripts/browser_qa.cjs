@@ -31,6 +31,89 @@ async function assertNoRawDebugText(page) {
   }
 }
 
+function attachRuntimeErrorGuards(page, label) {
+  const errors = [];
+  page.on("pageerror", (error) => {
+    errors.push(`pageerror: ${error.message}`);
+  });
+  page.on("console", (message) => {
+    if (message.type() === "error") {
+      const text = message.text();
+      if (/Failed to load resource|ERR_FAILED|net::ERR_FAILED/.test(text)) {
+        return;
+      }
+      errors.push(`console.error: ${text}`);
+    }
+  });
+  return () => {
+    assertOk(errors.length === 0, `${label}: runtime errors detected:\n${errors.join("\n")}`);
+  };
+}
+
+async function assertPlotlyCanvasPainted(page, locator, label) {
+  await locator.waitFor({ timeout: 30000 });
+  await page.waitForFunction(
+    (element) => {
+      const canvases = Array.from(element.querySelectorAll("canvas"));
+      return canvases.some((canvas) => {
+        const width = canvas.width;
+        const height = canvas.height;
+        if (width < 10 || height < 10) {
+          return false;
+        }
+        const context = canvas.getContext("2d", { willReadFrequently: true });
+        if (context) {
+          const sampleWidth = Math.min(width, 160);
+          const sampleHeight = Math.min(height, 120);
+          const data = context.getImageData(0, 0, sampleWidth, sampleHeight).data;
+          for (let index = 0; index < data.length; index += 4) {
+            if (data[index + 3] > 0 && (data[index] !== 255 || data[index + 1] !== 255 || data[index + 2] !== 255)) {
+              return true;
+            }
+          }
+          return false;
+        }
+
+        const gl = canvas.getContext("webgl2") || canvas.getContext("webgl") || canvas.getContext("experimental-webgl");
+        if (!gl) {
+          return false;
+        }
+        const sampleWidth = Math.min(width, 96);
+        const sampleHeight = Math.min(height, 96);
+        const x = Math.max(0, Math.floor((width - sampleWidth) / 2));
+        const y = Math.max(0, Math.floor((height - sampleHeight) / 2));
+        const pixels = new Uint8Array(sampleWidth * sampleHeight * 4);
+        gl.readPixels(x, y, sampleWidth, sampleHeight, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+        for (let index = 0; index < pixels.length; index += 4) {
+          if (pixels[index + 3] > 0 && (pixels[index] > 4 || pixels[index + 1] > 4 || pixels[index + 2] > 4)) {
+            return true;
+          }
+        }
+        return false;
+      });
+    },
+    await locator.elementHandle(),
+    { timeout: 30000 }
+  );
+  assertOk(await locator.locator("canvas").count() > 0, `${label}: Plotly did not create a canvas`);
+}
+
+async function assertPlotlyDomRendered(page, locator, label) {
+  await locator.waitFor({ timeout: 30000 });
+  await page.waitForFunction(
+    (element) =>
+      Boolean(
+        element.querySelector("canvas") ||
+          element.querySelector("svg.main-svg path.js-line") ||
+          element.querySelector("svg.main-svg .scatterlayer path") ||
+          element.querySelector("svg.main-svg .plot path")
+      ),
+    await locator.elementHandle(),
+    { timeout: 30000 }
+  );
+  assertOk((await locator.locator("canvas, svg.main-svg path").count()) > 0, `${label}: Plotly did not paint DOM marks`);
+}
+
 async function assertViewportFit(page, label) {
   const metrics = await page.evaluate(() => {
     const root = document.documentElement;
@@ -105,6 +188,7 @@ function writeTinyPng(filePath) {
 async function runDocumentFailureFlow(browser, baseUrl, screenshotDir) {
   const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
   const page = await context.newPage();
+  const assertNoRuntimeErrors = attachRuntimeErrorGuards(page, "desktop document failure flow");
   await page.route("**/documents", (route) => route.abort("failed"));
   await page.goto(baseUrl, { waitUntil: "networkidle" });
   await page.getByText("Math Agent").waitFor({ timeout: 15000 });
@@ -124,12 +208,14 @@ async function runDocumentFailureFlow(browser, baseUrl, screenshotDir) {
   await assertViewportFit(page, "desktop document failure retry");
   await page.screenshot({ path: path.join(screenshotDir, "desktop-document-failure-retry.jpg"), type: "jpeg", quality: 84 });
 
+  assertNoRuntimeErrors();
   await context.close();
 }
 
 async function runDesktopFlow(browser, baseUrl, screenshotDir) {
   const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
   const page = await context.newPage();
+  const assertNoRuntimeErrors = attachRuntimeErrorGuards(page, "desktop flow");
   await page.goto(baseUrl, { waitUntil: "networkidle" });
 
   await page.getByText("Math Agent").waitFor({ timeout: 15000 });
@@ -204,7 +290,7 @@ async function runDesktopFlow(browser, baseUrl, screenshotDir) {
     typeof automaticPlotPayload.expression === "string" && !/sin\s*\(/i.test(automaticPlotPayload.expression),
     "implicit 3D question used a sin fallback expression"
   );
-  await page.locator(".js-plotly-plot").waitFor({ timeout: 30000 });
+  await assertPlotlyCanvasPainted(page, page.locator(".js-plotly-plot").first(), "desktop implicit 3D plot");
   assertOk(
     (await page.getByRole("button", { name: /\u751f\u6210\u53ef\u89c6\u5316\u56fe\u5f62|\u751f\u6210\u56fe\u5f62/ }).count()) === 0,
     "implicit 3D plot required a manual generate click"
@@ -230,7 +316,7 @@ async function runDesktopFlow(browser, baseUrl, screenshotDir) {
 
   await page.getByRole("button", { name: /\u653e\u5927/ }).click();
   await page.locator("text=\u653e\u5927\u67e5\u770b\u56fe\u5f62\u7ec6\u8282").waitFor({ timeout: 15000 });
-  await page.locator(".js-plotly-plot").nth(1).waitFor({ timeout: 30000 });
+  await assertPlotlyCanvasPainted(page, page.locator(".js-plotly-plot").nth(1), "desktop implicit 3D modal plot");
   const modalPlotBox = await page.locator(".js-plotly-plot").nth(1).boundingBox();
   assertOk(modalPlotBox && modalPlotBox.width > 700 && modalPlotBox.height > 400, "modal plot rendered too small");
   await assertViewportFit(page, "desktop plot modal");
@@ -241,7 +327,7 @@ async function runDesktopFlow(browser, baseUrl, screenshotDir) {
   await page.reload({ waitUntil: "networkidle" });
   await page.getByText("Math Agent").waitFor({ timeout: 15000 });
   await page.getByRole("button", { name: /x\^4 \+ y\^4 \+ z\^4/ }).first().click();
-  await page.locator(".js-plotly-plot").waitFor({ timeout: 30000 });
+  await assertPlotlyCanvasPainted(page, page.locator(".js-plotly-plot").first(), "desktop history implicit 3D plot");
   assertOk((await page.getByRole("button", { name: /\u751f\u6210\u53ef\u89c6\u5316\u56fe\u5f62/ }).count()) === 0, "history restored only a plot suggestion");
   await assertViewportFit(page, "desktop history plot");
   await page.screenshot({ path: path.join(screenshotDir, "desktop-history-plot.jpg"), type: "jpeg", quality: 84 });
@@ -256,7 +342,7 @@ async function runDesktopFlow(browser, baseUrl, screenshotDir) {
   const functionPlotRequest = await functionPlotRequestPromise;
   const functionPlotPayload = JSON.parse(functionPlotRequest.postData() || "{}");
   assertOk(functionPlotPayload.plot_type === "function2d", "function visualization did not auto-request function2d plot");
-  await page.locator(".js-plotly-plot").waitFor({ timeout: 30000 });
+  await assertPlotlyDomRendered(page, page.locator(".js-plotly-plot").first(), "desktop function plot");
   const suggestionOnlySessions = await page.evaluate(async () => {
     const response = await fetch("http://127.0.0.1:8011/sessions");
     return response.json();
@@ -266,7 +352,7 @@ async function runDesktopFlow(browser, baseUrl, screenshotDir) {
   await page.getByText("Math Agent").waitFor({ timeout: 15000 });
   const suggestionTitle = suggestionOnlySessions[0].title;
   await page.getByRole("button", { name: new RegExp(suggestionTitle.slice(0, 18).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")) }).first().click();
-  await page.locator(".js-plotly-plot").waitFor({ timeout: 30000 });
+  await assertPlotlyDomRendered(page, page.locator(".js-plotly-plot").first(), "desktop history function plot");
   const suggestionDetail = await page.evaluate(async (id) => {
     const response = await fetch(`http://127.0.0.1:8011/sessions/${id}`);
     return response.json();
@@ -351,6 +437,7 @@ async function runDesktopFlow(browser, baseUrl, screenshotDir) {
   assertOk(deleteDocumentResponse.status() === 204, "document delete did not return 204");
   await waitForText(page, /\u4e0a\u4f20\u8bfe\u7a0b PDF \u540e/, "material strip did not return to empty state");
 
+  assertNoRuntimeErrors();
   await context.close();
 }
 
@@ -361,6 +448,7 @@ async function runMobileFlow(browser, baseUrl, screenshotDir) {
     hasTouch: true,
   });
   const page = await context.newPage();
+  const assertNoRuntimeErrors = attachRuntimeErrorGuards(page, "mobile flow");
   await page.goto(baseUrl, { waitUntil: "networkidle" });
 
   await page.getByText("Math Agent").waitFor({ timeout: 15000 });
@@ -373,6 +461,7 @@ async function runMobileFlow(browser, baseUrl, screenshotDir) {
   await assertViewportFit(page, "mobile composer image button");
   await page.screenshot({ path: path.join(screenshotDir, "mobile-composer.jpg"), type: "jpeg", quality: 84 });
 
+  assertNoRuntimeErrors();
   await context.close();
 }
 

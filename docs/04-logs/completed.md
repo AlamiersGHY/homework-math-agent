@@ -217,3 +217,12 @@
 - Fixed planner classification for explicit `y = f(x)` graph requests so they use `function2d`, including English `Draw the graph of y = sin(x)`.
 - Extended browser QA to cover PDF connection failure retry, hidden OCR attachment flow, multi-image thumbnails, image preview modal, automatic plot generation, and implicit 3D history restore.
 - Verified `.\scripts\release-check.ps1` on 2026-05-15 22:31 +08: 52 backend tests passed, deterministic evals passed, frontend typecheck/build passed, mock API smoke passed, browser QA passed with screenshots under `.cache/qa/20260515-223152`, and dependency audit advisory remained tracked under TD-005.
+
+## Implicit 3D Plot Render Fix And API Base Clarification
+
+- Fixed the implicit 3D Plotly spec for equations such as `x^4 + y^4 + z^4 = 1`: backend now emits a residual field around the zero level set with a nonzero isosurface band instead of `isomin == isomax`.
+- Updated plot tests so valid implicit surfaces must have a real isosurface interval and sampled values on both sides of zero.
+- Cleaned the plot viewer labels for `implicit3d`, exposed Plotly render failures in the related assistant message, and kept the frontend consuming backend Plotly specs rather than rederiving math.
+- Strengthened browser QA to capture runtime errors and verify implicit 3D Plotly WebGL canvas painting, not only the presence of `.js-plotly-plot`.
+- Added `apps/web/.env.example` and clarified README setup: direct `apps/web` starts need `NEXT_PUBLIC_API_BASE_URL`, while `.\scripts\dev.ps1` injects it automatically; PDF material/RAG uses the same local FastAPI API and requires no separate frontend or PDF key.
+- Verified `.\scripts\release-check.ps1` on 2026-05-15 23:13 +08: 52 backend tests passed, deterministic evals passed, frontend typecheck/build passed, mock API smoke passed, browser QA passed with screenshots under `.cache/qa/20260515-231310`, and dependency audit advisory remained tracked under TD-005.

@@ -9,11 +9,12 @@ Math Agent is a local MVP demo for a mathematical analysis learning assistant. T
 - Streaming chat through `POST /chat/stream`.
 - Answer modes: direct answer, guided explanation, and hint-only.
 - Local SQLite-backed sessions through `GET /sessions` and `GET /sessions/{session_id}`.
+- Local PDF material upload, lexical retrieval, and citation-safe source cards through the document and retrieval APIs.
 - OCR upload flow through `POST /ocr/recognize`; mock is test-safe, Doubao Vision is the preferred live MVP provider, Mathpix is reserved for a future adapter.
-- Plot preview through `POST /plots/preview` for `function2d`, `surface3d`, and bounded `region2d` specs rendered by Plotly in the frontend.
+- Plot preview through `POST /plots/preview` for `function2d`, `surface3d`, bounded `region2d`, and MVP `implicit3d` specs rendered by Plotly in the frontend.
 - Deterministic evals for classification and visualization behavior.
 
-Out of current MVP scope: RAG, LangGraph/runtime multi-agent orchestration, login/accounts, cross-device sync, and professional implicit-surface modeling.
+Out of current demo scope: a full RAG platform, LangGraph/runtime multi-agent orchestration, login/accounts, cross-device sync, and professional implicit-surface modeling.
 
 ## Quick Start
 
@@ -43,6 +44,16 @@ Default URLs:
 
 - API: `http://127.0.0.1:8000`
 - Web: `http://127.0.0.1:3000`
+
+The root `dev.ps1` entry injects the frontend API base URL automatically. If you start
+`apps/web` directly, copy `apps/web/.env.example` to `apps/web/.env.local` or set:
+
+```env
+NEXT_PUBLIC_API_BASE_URL=http://127.0.0.1:8000
+```
+
+PDF material upload/RAG does not require a separate provider key; it uses the same local
+FastAPI API and SQLite database.
 
 ## Configuration
 
@@ -128,7 +139,7 @@ Product scope, architecture, API contracts, coding standards, testing strategy, 
 
 ## 中文说明
 
-Math Agent 当前是一个本地可演示 MVP：前端是数学分析学习工作台，后端提供流式对话、轻量会话历史、OCR 确认链路和 Plotly 图形预览。当前版本不做 RAG、不做登录账户、不引入 LangGraph 或运行时多 Agent 编排。
+Math Agent 当前是一个本地可演示 MVP：前端是数学分析学习工作台，后端提供流式对话、轻量会话历史、OCR 确认链路、PDF 材料检索引用和 Plotly 图形预览。当前版本不做完整 RAG 平台、不做登录账户、不引入 LangGraph 或运行时多 Agent 编排。
 
 常用入口：
 

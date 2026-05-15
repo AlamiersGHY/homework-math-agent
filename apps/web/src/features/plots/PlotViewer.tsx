@@ -16,16 +16,23 @@ type PlotlyModule = {
 export function PlotViewer({
   className = "",
   onExpand,
+  onRenderError,
   plot,
   size = "inline"
 }: {
   className?: string;
   onExpand?: () => void;
+  onRenderError?: (message: string) => void;
   plot: PlotPreviewResponse;
   size?: "inline" | "modal";
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const onRenderErrorRef = useRef(onRenderError);
   const heightClass = size === "modal" ? "h-[62vh] min-h-[420px]" : "h-[280px] sm:h-[380px]";
+
+  useEffect(() => {
+    onRenderErrorRef.current = onRenderError;
+  }, [onRenderError]);
 
   useEffect(() => {
     let cancelled = false;
@@ -50,9 +57,13 @@ export function PlotViewer({
       }
     }
 
-    renderPlot().catch(() => {
+    renderPlot().catch((caught: unknown) => {
+      const message =
+        caught instanceof Error ? caught.message : "Plotly render failed";
+      console.error("Plot render failed", caught);
+      onRenderErrorRef.current?.(message);
       if (element) {
-        element.textContent = "图形渲染失败";
+        element.textContent = `图形渲染失败：${message}`;
       }
     });
 
@@ -97,6 +108,9 @@ export function PlotViewer({
 }
 
 function getPlotTypeLabel(plotType: PlotPreviewResponse["plot_type"]) {
+  if (plotType === "implicit3d") {
+    return "三维隐式曲面";
+  }
   if (plotType === "surface3d") {
     return "三维曲面";
   }

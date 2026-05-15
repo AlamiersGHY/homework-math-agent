@@ -41,6 +41,7 @@ Continue from the verified PDF RAG, citation, attachment UX, and automatic plot 
 - `AGENTIC_RAG_HANDOFF.md`
 - `apps/README.md`
 - `apps/web/README.md`
+- `apps/web/.env.example`
 - `apps/web/package.json`
 - `apps/web/package-lock.json`
 - `apps/web/src/app/page.tsx`
@@ -168,6 +169,11 @@ Continue from the verified PDF RAG, citation, attachment UX, and automatic plot 
 - The planner now treats explicit `y = f(x)` graph requests, including English `Draw the graph of y = sin(x)`, as `function2d` rather than incorrectly forcing them into `surface3d`.
 - Browser QA passed on 2026-05-15 22:30 +08 after the attachment/API/automatic-plot unit with screenshots under `.cache/qa/20260515-223007`.
 - `.\scripts\release-check.ps1` passed on 2026-05-15 22:31 +08: 52 backend tests, deterministic evals, frontend typecheck/build, mock API smoke, browser QA, and dependency audit advisory completed. Browser QA screenshots are under `.cache/qa/20260515-223152`.
+- User feedback on 2026-05-15 identified two follow-up defects: Plotly could still fail to render the implicit 3D card even though the DOM placeholder existed, and direct frontend starts could leave the PDF material strip disconnected from the FastAPI base URL.
+- The implicit 3D plot service now sends a residual scalar field `F(x,y,z)-level` with a narrow nonzero isosurface band instead of `isomin == isomax`; frontend plot cards label `implicit3d` correctly and surface Plotly render failures in the related assistant message.
+- Browser QA now treats Plotly rendering as a real visual assertion: it captures page/runtime errors and checks the implicit 3D WebGL canvas is painted, while 2D Plotly charts are checked for painted SVG/DOM marks.
+- `apps/web/.env.example`, `README.md`, and `apps/web/README.md` now document that direct frontend runs need `NEXT_PUBLIC_API_BASE_URL`, and that PDF material/RAG uses the same local FastAPI API rather than any separate PDF provider key.
+- `.\scripts\release-check.ps1` passed on 2026-05-15 23:13 +08 after the implicit 3D render/API-base clarification fix: 52 backend tests, deterministic evals, frontend typecheck/build, mock API smoke, browser QA, and dependency audit advisory completed. Browser QA screenshots are under `.cache/qa/20260515-231310`.
 
 ## Next Tasks
 
@@ -188,6 +194,7 @@ Continue from the verified PDF RAG, citation, attachment UX, and automatic plot 
 - `.\scripts\release-check.ps1` passed on 2026-05-15 17:39 +08 after the session-history/UI foundation unit: backend pytest, deterministic evals, frontend typecheck/build, mock API smoke, browser QA, and dependency audit advisory completed.
 - `.\scripts\release-check.ps1` passed on 2026-05-15 18:10 +08 after PDF RAG/citation v1: backend pytest, deterministic evals, frontend typecheck/build, mock API smoke, browser QA, and dependency audit advisory completed.
 - `.\scripts\release-check.ps1` passed on 2026-05-15 22:31 +08 after the PDF connection, image attachment UX, and automatic plot execution unit; dependency audit remains advisory under TD-005.
+- `.\scripts\release-check.ps1` passed on 2026-05-15 23:13 +08 after the implicit 3D Plotly render fix and frontend API-base documentation update; dependency audit remains advisory under TD-005.
 
 ## Exit Checklist
 

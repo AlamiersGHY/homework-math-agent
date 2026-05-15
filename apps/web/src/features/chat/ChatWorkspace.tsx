@@ -774,6 +774,13 @@ export function ChatWorkspace() {
                         setPlotModal({ plot, title: getPlotTypeLabel(plot.plot_type) })
                       }
                       onGeneratePlot={(request) => generatePlot(message.id, request)}
+                      onPlotRenderError={(plotError) =>
+                        setMessages((current) =>
+                          current.map((item) =>
+                            item.id === message.id ? { ...item, plotError } : item
+                          )
+                        )
+                      }
                     />
                   ))}
                 </div>
@@ -1041,11 +1048,13 @@ function Starter({
 function MessageBubble({
   message,
   onExpandPlot,
-  onGeneratePlot
+  onGeneratePlot,
+  onPlotRenderError
 }: {
   message: ChatMessage;
   onExpandPlot: (plot: PlotPreviewResponse) => void;
   onGeneratePlot: (request: PlotPreviewRequest) => void;
+  onPlotRenderError: (message: string) => void;
 }) {
   const isUser = message.role === "user";
 
@@ -1104,6 +1113,7 @@ function MessageBubble({
           <PlotViewer
             className="mt-4"
             onExpand={() => onExpandPlot(message.plot as PlotPreviewResponse)}
+            onRenderError={(errorMessage) => onPlotRenderError(`图形渲染失败：${errorMessage}`)}
             plot={message.plot}
           />
         ) : null}
