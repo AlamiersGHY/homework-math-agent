@@ -100,7 +100,7 @@ SSE 事件：
 
 ```text
 event: start
-data: {"session_id":"...","answer_mode":"guided"}
+data: {"session_id":"...","answer_mode":"guided","user_message_id":"msg-..."}
 
 event: metadata
 data: {"question_type":"computational","should_visualize":false}
@@ -112,7 +112,7 @@ event: metadata
 data: {"plot_suggestion":null}
 
 event: done
-data: {"finish_reason":"stop"}
+data: {"finish_reason":"stop","assistant_message_id":"msg-..."}
 ```
 
 错误事件：
@@ -126,8 +126,67 @@ data: {"code":"llm_provider_error","message":"LLM provider failed","details":{}}
 
 - `delta` 可以出现多次。
 - `metadata` 可以在流开始或结束前出现多次。
+- `user_message_id` 和 `assistant_message_id` 是本地持久化消息 ID，前端只把它们当作 opaque id，用于把临时消息替换成可恢复的历史消息，并关联后续 plot artifact。
 - 如果需要可视化，`metadata.plot_suggestion` 可给出 plot preview 的建议参数，但真正图形生成走 `/plots/preview`。
 - 实现阶段可保留普通 JSON debug endpoint，但正式聊天契约以 SSE 为主。
+
+## GET /sessions
+
+用途：列出本地 SQLite 保存的最近学习会话。
+
+响应 JSON：
+
+```json
+[
+  {
+    "id": "session-...",
+    "title": "求 lim(x->0) sin(x)/x",
+    "default_answer_mode": "guided",
+    "created_at": "2026-05-15T00:00:00Z",
+    "updated_at": "2026-05-15T00:00:00Z"
+  }
+]
+```
+
+## GET /sessions/{session_id}
+
+用途：读取单个本地学习会话，包含消息和可恢复 artifacts。
+
+响应 JSON：
+
+```json
+{
+  "session": {
+    "id": "session-...",
+    "title": "画一下 z = sin(x*y) 的三维曲面",
+    "default_answer_mode": "direct",
+    "created_at": "2026-05-15T00:00:00Z",
+    "updated_at": "2026-05-15T00:00:00Z"
+  },
+  "messages": [],
+  "artifacts": [
+    {
+      "id": "artifact-...",
+      "artifact_type": "plot_preview",
+      "payload": {
+        "request": {},
+        "plot": {}
+      },
+      "message_id": "msg-...",
+      "created_at": "2026-05-15T00:00:00Z"
+    }
+  ]
+}
+```
+
+## DELETE /sessions/{session_id}
+
+用途：删除本地 SQLite 会话及其 messages/artifacts。
+
+响应：
+
+- `204 No Content`：删除成功。
+- `404`：会话不存在。
 
 ## POST /ocr/recognize
 
@@ -156,6 +215,7 @@ data: {"code":"llm_provider_error","message":"LLM provider failed","details":{}}
 - `recognized_text` 是前端展示和用户编辑的默认文本。
 - `confidence` 可为空或为 provider 估计值。
 - `warnings` 用于提示识别不确定、公式可能缺失等问题。
+- 前端可以把 `recognized_text` 预填到同一个聊天输入框，但不得自动提交到 `POST /chat/stream`。
 - OCR 失败时返回统一错误 JSON。
 
 ## POST /plots/preview
@@ -173,7 +233,9 @@ data: {"code":"llm_provider_error","message":"LLM provider failed","details":{}}
     "x": [-3, 3],
     "y": [-3, 3]
   },
-  "source": "user_or_agent"
+  "source": "user_or_agent",
+  "session_id": "optional-session-id",
+  "message_id": "optional-assistant-message-id"
 }
 ```
 
@@ -196,6 +258,8 @@ data: {"code":"llm_provider_error","message":"LLM provider failed","details":{}}
 - 第一版优先返回 Plotly 风格 spec。
 - `function2d` 至少需要一个变量和一个范围。
 - `surface3d` 至少需要两个变量和两个范围。
+- 当 `session_id` 对应本地会话存在时，后端会把 plot preview 作为 `plot_preview` artifact 保存到该会话；`message_id` 用于把图形关联到对应 assistant message。
+- 前端恢复历史会话时应优先使用 session detail 中的 `plot_preview` artifact，而不是重新推导数学表达式。
 - 后端应对表达式解析失败、范围不合法、采样失败给出结构化错误。
 
 ## 后续可选接口

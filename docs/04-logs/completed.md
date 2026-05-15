@@ -160,3 +160,14 @@
 - Added a repeatable optional live OpenAI-compatible LLM smoke path through `release-check.ps1 -LiveLLM`.
 - Verified the release path on 2026-05-15 00:01 +08 with `.\scripts\release-check.ps1`: backend pytest, evals, frontend typecheck/build, mock API smoke, browser QA, and dependency audit advisory completed.
 - Verified the local real OpenAI-compatible LLM path with the user's configured `.env` key; the latest smoke passed on 2026-05-15 00:02 +08 with SSE `start/metadata/delta/done` and no `error` event.
+
+## Workspace Session And Artifact Refinement
+
+- Reworked the workspace UI into a fixed-height app shell with a pinned composer and a transcript-centered scroll model to remove the large blank lower-page behavior reported in user screenshots.
+- Replaced the separate OCR tab flow with an inline composer attachment flow: image upload runs OCR, fills the normal input with editable text, and still requires explicit user send.
+- Added basic local session deletion and kept it scoped to SQLite demo history; deleting a session removes its messages and artifacts.
+- Added persisted message IDs to chat SSE so generated artifacts can be associated with stable assistant messages.
+- Persisted generated plot previews as `plot_preview` session artifacts and restored them from history without regenerating or rederiving math in the UI.
+- Added message-level Plotly rendering with a larger modal view for 2D/3D/region plots.
+- Expanded browser QA to cover app-shell viewport fit, inline OCR, plot modal, history plot restore, and session deletion.
+- Verified `.\scripts\release-check.ps1` on 2026-05-15 14:29 +08: backend pytest, evals, frontend typecheck/build, mock API smoke, browser QA, and dependency audit advisory completed.
