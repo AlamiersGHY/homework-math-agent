@@ -40,6 +40,7 @@ This file is the routing guide for project documentation. It helps humans and AI
 - `03-decisions/ADR-006-ocr-provider-strategy.md`: OCR provider decision for mock-first testing, Doubao live OCR, and future Mathpix.
 - `03-decisions/ADR-007-agentic-rag-prototype.md`: accepted direction for the Agentic RAG / intelligent course assistant prototype.
 - `03-decisions/ADR-008-planner-driven-service-pipeline.md`: planner-driven explicit service pipeline decision for Phase 1.
+- `03-decisions/ADR-009-retrieval-citation-strategy.md`: proposed PDF retrieval and citation safety strategy for the next RAG implementation unit.
 
 ## Logs
 
