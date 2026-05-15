@@ -18,6 +18,7 @@ from math_agent_api.schemas.chat import (
     StartEvent,
 )
 from math_agent_api.schemas.common import ErrorBody, QuestionType
+from math_agent_api.schemas.retrieval import RetrievedSource
 from math_agent_api.services.agent_policy_planner import (
     active_message_for_request,
     classify_question as _classify_question,
@@ -25,6 +26,7 @@ from math_agent_api.services.agent_policy_planner import (
     plan_agent_turn,
     should_visualize as _should_visualize,
 )
+from math_agent_api.services.retrieval_service import search_retrieval
 from math_agent_api.services.session_service import (
     append_artifact,
     append_message,
@@ -149,6 +151,16 @@ async def stream_chat_with_provider(
     plan = plan or plan_agent_turn(request, question_type_override=question_type)
     active_message = active_message_for_request(request)
     plot_suggestion = plan.plot_suggestion_payload()
+    retrieval_attempted = False
+    retrieved_sources: list[RetrievedSource] = []
+    if db is not None and plan.needs_retrieval:
+        try:
+            retrieval = search_retrieval(db=db, query=active_message, top_k=5)
+            retrieval_attempted = True
+            retrieved_sources = retrieval.results
+        except Exception:
+            retrieval_attempted = True
+            retrieved_sources = []
     ensure_session(db, session_id, default_answer_mode=plan.answer_mode)
     user_record = append_message(
         db,
@@ -176,11 +188,19 @@ async def stream_chat_with_provider(
             should_visualize=plan.needs_plot,
             plot_suggestion=plot_suggestion,
             planner=plan,
+            retrieval_attempted=retrieval_attempted,
+            retrieved_sources=retrieved_sources,
+            citations=retrieved_sources,
         ).model_dump(mode="json"),
     )
 
     try:
-        messages = build_chat_messages(request, plan.question_type, answer_mode=plan.answer_mode)
+        messages = build_chat_messages(
+            request,
+            plan.question_type,
+            answer_mode=plan.answer_mode,
+            retrieved_sources=retrieved_sources,
+        )
         answer_parts: list[str] = []
         async for chunk in provider.stream_chat(messages):
             answer_parts.append(chunk)
@@ -204,6 +224,11 @@ async def stream_chat_with_provider(
                     "should_visualize": plan.needs_plot,
                     "plot_suggestion": plot_suggestion,
                     "planner": plan.model_dump(mode="json"),
+                    "retrieval_attempted": retrieval_attempted,
+                    "retrieved_sources": [
+                        source.model_dump(mode="json") for source in retrieved_sources
+                    ],
+                    "citations": [source.model_dump(mode="json") for source in retrieved_sources],
                 },
                 message_id=assistant_record.id,
             )

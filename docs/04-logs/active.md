@@ -6,7 +6,7 @@ Agentic RAG Prototype / Intelligent Course Assistant Prototype.
 
 ## Current Goal
 
-Begin the PDF ingestion + retrieval v1 unit for the Agentic RAG prototype. The verified session-history/UI foundation is now in place, so the next coherent implementation unit should add local document upload, page-aware extraction/chunking, retrieval APIs, and citation-safe chat metadata without turning the product into a manual knowledge-base workbench.
+Continue from the verified PDF RAG and citation unit toward planner-driven automatic tool execution and lightweight preferences/memory. The current local prototype now supports PDF upload, page-aware chunk storage, deterministic retrieval, chat citation metadata, frontend source display, and history replay. The next coherent implementation unit should make more planner decisions execute automatically, especially supported plot previews and clarification-first responses, without turning the product into a manual tool workbench.
 
 ## Relevant Docs
 
@@ -49,6 +49,7 @@ Begin the PDF ingestion + retrieval v1 unit for the Agentic RAG prototype. The v
 - `apps/web/src/features/chat/ChatWorkspace.tsx`
 - `apps/web/src/features/plots/PlotViewer.tsx`
 - `apps/web/src/lib/api/chatStream.ts`
+- `apps/web/src/lib/api/documents.ts`
 - `apps/web/src/lib/api/sessions.ts`
 - `apps/web/src/lib/math/normalizeMathMarkdown.ts`
 - `apps/web/src/types/chat.ts`
@@ -58,26 +59,37 @@ Begin the PDF ingestion + retrieval v1 unit for the Agentic RAG prototype. The v
 - `apps/api/.env.example`
 - `apps/api/src/math_agent_api/core/config.py`
 - `apps/api/src/math_agent_api/providers/llm.py`
+- `apps/api/src/math_agent_api/providers/document_parser.py`
 - `apps/api/src/math_agent_api/providers/ocr.py`
 - `apps/api/src/math_agent_api/prompts/chat.py`
 - `apps/api/src/math_agent_api/db/repositories.py`
+- `apps/api/src/math_agent_api/db/models.py`
+- `apps/api/src/math_agent_api/routers/documents.py`
 - `apps/api/src/math_agent_api/routers/plots.py`
+- `apps/api/src/math_agent_api/routers/retrieval.py`
 - `apps/api/src/math_agent_api/routers/sessions.py`
 - `apps/api/src/math_agent_api/schemas/chat.py`
+- `apps/api/src/math_agent_api/schemas/documents.py`
+- `apps/api/src/math_agent_api/schemas/retrieval.py`
 - `apps/api/src/math_agent_api/schemas/plots.py`
 - `apps/api/src/math_agent_api/schemas/agent_policy.py`
 - `apps/api/src/math_agent_api/services/agent_policy_planner.py`
 - `apps/api/src/math_agent_api/services/chat_service.py`
+- `apps/api/src/math_agent_api/services/document_service.py`
 - `apps/api/src/math_agent_api/services/ocr_service.py`
 - `apps/api/src/math_agent_api/services/plot_service.py`
+- `apps/api/src/math_agent_api/services/retrieval_service.py`
 - `apps/api/src/math_agent_api/services/session_service.py`
 - `apps/api/tests/test_agent_policy_planner.py`
 - `apps/api/tests/test_chat_stream.py`
+- `apps/api/tests/test_documents.py`
+- `apps/api/tests/test_retrieval.py`
 - `scripts/run_evals.py`
 - `docs/04-logs/tech-debt-tracker.md`
 - `scripts/README.md`
 - `scripts/browser-qa.ps1`
 - `scripts/browser_qa.cjs`
+- `scripts/smoke_api.py`
 - `scripts/smoke_live_llm.py`
 
 ## In Progress
@@ -141,15 +153,21 @@ Begin the PDF ingestion + retrieval v1 unit for the Agentic RAG prototype. The v
 - User feedback also identified a blocking session-history defect: historical sessions can miss full chat history and no longer restore plot/3D state reliably because session detail truncates messages, chat metadata is not persisted, plot suggestions are not recoverable, and plot artifacts can be unbound from assistant messages.
 - Current work is organized as explicit deliverable units: (1) session-state restoration and UI polish, (2) retrieval/citation ADR and API contract update, (3) PDF ingestion/retrieval v1, (4) citation-aware chat integration and frontend citation display, then (5) automatic tool execution polish.
 - Session-state restoration and UI foundation are now implemented and release-validated: session detail returns full ordered messages and artifacts, chat persists `chat_metadata` and `plot_suggestion`, generated plots are linked to assistant message IDs, historical plot suggestions and previews restore in the UI, and browser QA covers history plot replay, suggestion-only replay, OCR-in-composer, plot modal, deletion, and desktop/mobile viewport fit.
-- `ADR-009` now proposes the retrieval/citation strategy: PyMuPDF behind a parser provider boundary, SQLite `documents` / `document_chunks`, local lexical retrieval v1, backend-owned citation validation, and no fabricated filename/page/section metadata.
+- `ADR-009` defines the accepted retrieval/citation strategy: PyMuPDF behind a parser provider boundary, SQLite `documents` / `document_chunks`, local lexical retrieval v1, backend-owned citation validation, and no fabricated filename/page/section metadata.
+- `ADR-009` is now accepted and implemented for v1: PyMuPDF is used behind a document parser provider, SQLite stores local `documents` and `document_chunks`, and retrieval uses deterministic lexical scoring without a vector DB or remote embedding dependency.
+- Backend PDF RAG v1 is implemented through route/schema/service/provider/repository boundaries: `POST /documents/upload`, `GET /documents`, `DELETE /documents/{document_id}`, and `POST /retrieval/search`.
+- Chat streaming now uses planner `needs_retrieval=true` to automatically call retrieval when a database session is available, injects retrieved source snippets into the prompt, emits `retrieval_attempted`, `retrieved_sources`, and `citations` metadata, and persists that metadata as `chat_metadata`.
+- The frontend now has a compact chat-first materials strip for PDF upload/list/delete and renders backend-provided source cards under the related assistant answer; it does not synthesize filenames, pages, sections, or snippets from answer text.
+- Historical sessions now restore retrieved-source/citation state from persisted `chat_metadata` alongside existing plot suggestions and generated plot previews.
+- Mock API smoke now covers PDF upload, retrieval, citation-bearing chat metadata, document deletion, and empty retrieval after deletion.
+- Browser QA now covers PDF material upload, citation source display, citation history replay, no raw debug metadata leakage, plot history replay, inline OCR, session deletion, material deletion, and desktop/mobile viewport fit. Latest full release validation passed on 2026-05-15 18:10 +08 with screenshots under `.cache/qa/20260515-181039`.
 
 ## Next Tasks
 
-- Finalize the API contract for `POST /documents/upload`, `GET /documents`, `DELETE /documents/{id}`, and `POST /retrieval/search` before implementing routes.
-- Implement PDF ingestion/retrieval v1 through service/provider/repository boundaries: document parser provider, SQLite document/chunk tables, deterministic chunking, local lexical retrieval, and no remote embedding dependency.
-- Add frontend Materials entry that stays chat-first: upload PDF, show processing status/list/delete, and avoid a full document workbench.
-- Add backend tests and evals for ingestion, retrieval, empty retrieval/no fabricated citations, and retrieval failure not breaking chat.
-- After retrieval v1 is verified, wire retrieved sources into `POST /chat/stream` metadata and frontend citation display as the next unit.
+- Implement automatic tool execution polish: when planner emits a supported `plot_suggestion`, the backend/frontend should attach the plot preview with less manual user effort while preserving explicit error handling and artifact persistence.
+- Add clarification-first response behavior for planner `needs_clarification=true` so broad/off-topic/underspecified requests can return a focused first question instead of a generic answer.
+- Begin preferences + lightweight memory planning and implementation only after documenting the local schema/API boundary; keep it local-only and bounded.
+- Improve retrieval ranking/chunking after the v1 lexical baseline only if tests and ADR updates keep citation safety intact.
 - Defer live Doubao OCR smoke until the configured `DOUBAO_VISION_MODEL` points to an accessible Ark endpoint.
 
 ## Blockers
@@ -158,10 +176,11 @@ Begin the PDF ingestion + retrieval v1 unit for the Agentic RAG prototype. The v
 - Doubao OCR live smoke additionally requires a vision-capable model or endpoint id in `DOUBAO_VISION_MODEL`.
 - Mathpix is not the active OCR provider because the user does not accept its current setup/billing requirement for this MVP; keep it as a future adapter path only.
 - `npm audit` still reports 2 moderate findings through the current Next/PostCSS dependency chain; do not run `npm audit fix --force` without a release dependency review.
-- PDF ingestion, retrieval, citations, preferences, and memory are accepted next-stage scope but are not yet implemented beyond planner intent metadata.
+- Preferences and memory are accepted next-stage scope but are not yet implemented beyond planner intent metadata.
 - `.\scripts\check.ps1` passed on 2026-05-15 15:19 +08 after moving pytest temporary directories to the system temp path to avoid Windows cache-directory permission locks.
 - `.\scripts\release-check.ps1` passed on 2026-05-15 15:20 +08: backend pytest, deterministic evals, frontend typecheck/build, mock API smoke, browser QA, and dependency audit advisory completed.
 - `.\scripts\release-check.ps1` passed on 2026-05-15 17:39 +08 after the session-history/UI foundation unit: backend pytest, deterministic evals, frontend typecheck/build, mock API smoke, browser QA, and dependency audit advisory completed.
+- `.\scripts\release-check.ps1` passed on 2026-05-15 18:10 +08 after PDF RAG/citation v1: backend pytest, deterministic evals, frontend typecheck/build, mock API smoke, browser QA, and dependency audit advisory completed.
 
 ## Exit Checklist
 

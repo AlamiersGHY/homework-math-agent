@@ -95,6 +95,8 @@
 
 ### Phase 4.2：PDF / 课程材料检索 v1
 
+Status: completed for the current local prototype on 2026-05-15.
+
 核心能力：
 
 - PDF/课程材料上传。
@@ -110,6 +112,8 @@
 - 空检索不编造来源。
 
 ### Phase 4.3：Citation-Aware Answering
+
+Status: completed for the current local prototype on 2026-05-15.
 
 核心能力：
 

@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from math_agent_api.core.config import get_settings
 from math_agent_api.db.session import init_db
-from math_agent_api.routers import chat, health, ocr, plots, sessions
+from math_agent_api.routers import chat, documents, health, ocr, plots, retrieval, sessions
 
 
 def create_app() -> FastAPI:
@@ -25,6 +25,8 @@ def create_app() -> FastAPI:
     app.include_router(ocr.router)
     app.include_router(plots.router)
     app.include_router(sessions.router)
+    app.include_router(documents.router)
+    app.include_router(retrieval.router)
     return app
 
 

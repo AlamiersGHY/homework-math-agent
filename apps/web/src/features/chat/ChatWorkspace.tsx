@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { MathMarkdown } from "@/components/MathMarkdown";
 import { checkHealth, type HealthResponse } from "@/lib/api/health";
+import { deleteDocument, listDocuments, uploadDocument } from "@/lib/api/documents";
 import { recognizeOcrImage } from "@/lib/api/ocr";
 import { createPlotPreview } from "@/lib/api/plots";
 import { deleteSession, getSession, listSessions } from "@/lib/api/sessions";
@@ -11,11 +12,13 @@ import { PlotViewer } from "@/features/plots/PlotViewer";
 import type {
   AnswerMode,
   ChatMessage,
+  DocumentSummary,
   MetadataEventData,
   OCRRecognizeResponse,
   PlotPreviewRequest,
   PlotPreviewResponse,
   QuestionType,
+  RetrievedSource,
   SessionSummary,
   StartEventData
 } from "@/types/chat";
@@ -90,6 +93,13 @@ type PlotModalState = {
   title: string;
 } | null;
 
+type MaterialsState = {
+  items: DocumentSummary[];
+  loading: boolean;
+  uploading: boolean;
+  error: string | null;
+};
+
 const initialMetadata: ChatMetadata = {
   sessionId: null,
   answerMode: "guided",
@@ -106,6 +116,12 @@ export function ChatWorkspace() {
   const [metadata, setMetadata] = useState<ChatMetadata>(initialMetadata);
   const [health, setHealth] = useState<HealthState>({ status: "checking" });
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
+  const [materials, setMaterials] = useState<MaterialsState>({
+    items: [],
+    loading: true,
+    uploading: false,
+    error: null
+  });
   const [attachment, setAttachment] = useState<AttachmentState>({ status: "idle" });
   const [isStreaming, setIsStreaming] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -124,6 +140,7 @@ export function ChatWorkspace() {
   useEffect(() => {
     refreshHealth();
     refreshSessions();
+    refreshMaterials();
   }, []);
 
   useEffect(() => {
@@ -153,6 +170,20 @@ export function ChatWorkspace() {
     }
   }
 
+  async function refreshMaterials() {
+    setMaterials((current) => ({ ...current, loading: true, error: null }));
+    try {
+      const items = await listDocuments();
+      setMaterials((current) => ({ ...current, items, loading: false, error: null }));
+    } catch (caught: unknown) {
+      setMaterials((current) => ({
+        ...current,
+        loading: false,
+        error: caught instanceof Error ? caught.message : "材料列表加载失败"
+      }));
+    }
+  }
+
   async function loadSession(sessionId: string) {
     if (isStreaming) {
       return;
@@ -171,6 +202,10 @@ export function ChatWorkspace() {
         detail.artifacts.filter((artifact) => artifact.artifact_type === "plot_suggestion"),
         assistantIds
       );
+      const metadataLookup = buildChatMetadataLookup(
+        detail.artifacts.filter((artifact) => artifact.artifact_type === "chat_metadata"),
+        assistantIds
+      );
       const loadedMessages: ChatMessage[] = detail.messages.map((message) => ({
         id: message.id,
         role: message.role,
@@ -182,7 +217,21 @@ export function ChatWorkspace() {
         source: message.source,
         plot: message.role === "assistant" ? plotLookup.get(message.id) ?? null : null,
         plotSuggestion:
-          message.role === "assistant" ? suggestionLookup.get(message.id) ?? null : null
+          message.role === "assistant"
+            ? suggestionLookup.get(message.id) ??
+              metadataLookup.get(message.id)?.plot_suggestion ??
+              null
+            : null,
+        retrievalAttempted:
+          message.role === "assistant"
+            ? metadataLookup.get(message.id)?.retrieval_attempted ?? false
+            : false,
+        retrievedSources:
+          message.role === "assistant"
+            ? metadataLookup.get(message.id)?.citations ??
+              metadataLookup.get(message.id)?.retrieved_sources ??
+              []
+            : []
       }));
 
       setMessages(loadedMessages);
@@ -216,6 +265,46 @@ export function ChatWorkspace() {
       await refreshSessions();
     } catch (caught: unknown) {
       setError(caught instanceof Error ? caught.message : "会话删除失败");
+    }
+  }
+
+  async function handlePdfPick(file: File | null) {
+    if (!file) {
+      return;
+    }
+
+    setMaterials((current) => ({ ...current, uploading: true, error: null }));
+    try {
+      const uploaded = await uploadDocument(file);
+      setMaterials((current) => ({
+        ...current,
+        items: upsertDocument(current.items, uploaded),
+        uploading: false,
+        error: uploaded.status === "failed" ? uploaded.error_message ?? "PDF 未提取到可检索文本" : null
+      }));
+      await refreshMaterials();
+    } catch (caught: unknown) {
+      setMaterials((current) => ({
+        ...current,
+        uploading: false,
+        error: caught instanceof Error ? caught.message : "PDF 上传失败"
+      }));
+    }
+  }
+
+  async function removeDocument(documentId: string) {
+    setMaterials((current) => ({ ...current, error: null }));
+    try {
+      await deleteDocument(documentId);
+      setMaterials((current) => ({
+        ...current,
+        items: current.items.filter((item) => item.id !== documentId)
+      }));
+    } catch (caught: unknown) {
+      setMaterials((current) => ({
+        ...current,
+        error: caught instanceof Error ? caught.message : "材料删除失败"
+      }));
     }
   }
 
@@ -293,17 +382,23 @@ export function ChatWorkspace() {
             }
           },
           onMetadata: (data: MetadataEventData) => {
+            const sources = data.citations ?? data.retrieved_sources ?? [];
             setMetadata((current) => ({
               ...current,
               questionType: data.question_type,
               shouldVisualize: data.should_visualize,
               plotSuggestion: data.plot_suggestion
             }));
-            if (data.plot_suggestion) {
+            if (data.plot_suggestion || data.retrieval_attempted !== undefined || sources.length > 0) {
               setMessages((current) =>
                 current.map((item) =>
                   item.id === assistantId
-                    ? { ...item, plotSuggestion: data.plot_suggestion }
+                    ? {
+                        ...item,
+                        plotSuggestion: data.plot_suggestion ?? item.plotSuggestion,
+                        retrievalAttempted: data.retrieval_attempted ?? item.retrievalAttempted,
+                        retrievedSources: sources.length > 0 ? sources : item.retrievedSources ?? []
+                      }
                     : item
                 )
               );
@@ -544,6 +639,13 @@ export function ChatWorkspace() {
               <div className="mx-auto max-w-6xl">{error}</div>
             </div>
           ) : null}
+
+          <MaterialsStrip
+            disabled={isStreaming}
+            materials={materials}
+            onDeleteDocument={removeDocument}
+            onPdfPick={handlePdfPick}
+          />
 
           <Composer
             answerMode={answerMode}
@@ -810,6 +912,12 @@ function MessageBubble({
             <span className="block h-full w-1/2 animate-pulse rounded-full bg-emerald-600" />
           </span>
         ) : null}
+        {!isUser ? (
+          <SourcesPanel
+            retrievalAttempted={Boolean(message.retrievalAttempted)}
+            sources={message.retrievedSources ?? []}
+          />
+        ) : null}
         {!isUser && message.plotSuggestion && !message.plot ? (
           <button
             className="mt-3 inline-flex h-9 items-center rounded-md border border-emerald-200 bg-emerald-50 px-3 text-sm font-semibold text-emerald-900 transition hover:bg-emerald-100 disabled:opacity-60"
@@ -838,6 +946,140 @@ function MessageBubble({
         ) : null}
       </div>
     </article>
+  );
+}
+
+function SourcesPanel({
+  retrievalAttempted,
+  sources
+}: {
+  retrievalAttempted: boolean;
+  sources: RetrievedSource[];
+}) {
+  if (!retrievalAttempted && sources.length === 0) {
+    return null;
+  }
+
+  if (sources.length === 0) {
+    return (
+      <div className="mt-3 rounded-md border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm text-neutral-600">
+        未在已上传材料中找到可引用依据。
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-3 space-y-2 rounded-md border border-emerald-100 bg-emerald-50/60 p-3">
+      <p className="text-xs font-semibold uppercase text-emerald-800">引用材料</p>
+      <div className="grid gap-2">
+        {sources.slice(0, 4).map((source) => (
+          <div
+            className="rounded-md border border-white/70 bg-white px-3 py-2 text-sm shadow-sm"
+            key={source.chunk_id}
+          >
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="inline-flex h-5 min-w-5 items-center justify-center rounded bg-emerald-700 px-1.5 text-xs font-semibold text-white">
+                {source.source_index}
+              </span>
+              <span className="min-w-0 max-w-full truncate font-semibold text-neutral-950">
+                {source.filename}
+              </span>
+              <span className="text-xs font-medium text-neutral-500">
+                {formatPageRange(source)}
+              </span>
+              {source.section_title ? (
+                <span className="max-w-full truncate rounded bg-neutral-100 px-1.5 py-0.5 text-xs text-neutral-600">
+                  {source.section_title}
+                </span>
+              ) : null}
+            </div>
+            <p className="mt-1.5 line-clamp-2 leading-6 text-neutral-600">{source.snippet}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function MaterialsStrip({
+  disabled,
+  materials,
+  onDeleteDocument,
+  onPdfPick
+}: {
+  disabled: boolean;
+  materials: MaterialsState;
+  onDeleteDocument: (documentId: string) => void;
+  onPdfPick: (file: File | null) => void;
+}) {
+  const pdfInputRef = useRef<HTMLInputElement | null>(null);
+  const readyCount = materials.items.filter((item) => item.status === "ready").length;
+
+  return (
+    <div className="shrink-0 border-t border-neutral-200 bg-[#f8f8f3] px-4 py-2 sm:px-6">
+      <div className="mx-auto flex max-w-5xl flex-wrap items-center gap-2 text-sm">
+        <button
+          aria-label="上传 PDF 课程材料"
+          className="inline-flex h-8 items-center rounded-md border border-neutral-300 bg-white px-3 font-semibold text-neutral-800 transition hover:border-emerald-300 hover:text-emerald-800 disabled:cursor-not-allowed disabled:opacity-50"
+          disabled={disabled || materials.uploading}
+          onClick={() => pdfInputRef.current?.click()}
+          title="上传 PDF 课程材料"
+          type="button"
+        >
+          {materials.uploading ? "索引中" : "PDF 材料"}
+        </button>
+        <input
+          accept="application/pdf,.pdf"
+          className="sr-only"
+          disabled={disabled || materials.uploading}
+          onChange={(event) => {
+            onPdfPick(event.target.files?.[0] ?? null);
+            event.currentTarget.value = "";
+          }}
+          ref={pdfInputRef}
+          type="file"
+        />
+        <span className="text-neutral-600">
+          {materials.loading
+            ? "正在读取材料"
+            : readyCount > 0
+              ? `${readyCount} 份材料可被自动检索`
+              : "上传课程 PDF 后，相关问题会自动检索引用"}
+        </span>
+        {materials.items.slice(0, 3).map((item) => (
+          <span
+            className={`inline-flex max-w-64 items-center gap-1 rounded-md border px-2 py-1 ${
+              item.status === "ready"
+                ? "border-emerald-200 bg-white text-neutral-800"
+                : "border-amber-200 bg-amber-50 text-amber-800"
+            }`}
+            key={item.id}
+            title={item.error_message ?? item.filename}
+          >
+            <span className="truncate">{item.filename}</span>
+            <span className="shrink-0 text-xs text-neutral-500">
+              {item.status === "ready" ? `${item.chunk_count} 段` : "不可检索"}
+            </span>
+            <button
+              aria-label={`删除材料 ${item.filename}`}
+              className="ml-1 h-5 w-5 shrink-0 rounded text-neutral-500 hover:bg-neutral-100 hover:text-neutral-900"
+              disabled={disabled}
+              onClick={() => onDeleteDocument(item.id)}
+              title="删除材料"
+              type="button"
+            >
+              ×
+            </button>
+          </span>
+        ))}
+        {materials.items.length > 3 ? (
+          <span className="text-xs font-medium text-neutral-500">+{materials.items.length - 3}</span>
+        ) : null}
+        {materials.error ? (
+          <span className="min-w-0 flex-1 text-red-700">{materials.error}</span>
+        ) : null}
+      </div>
+    </div>
   );
 }
 
@@ -1090,6 +1332,73 @@ function buildPlotSuggestionLookup(
   return lookup;
 }
 
+type StoredChatMetadata = {
+  question_type?: QuestionType;
+  should_visualize?: boolean;
+  plot_suggestion?: PlotPreviewRequest | null;
+  retrieval_attempted?: boolean;
+  retrieved_sources?: RetrievedSource[];
+  citations?: RetrievedSource[];
+};
+
+function buildChatMetadataLookup(
+  artifacts: Array<{
+    message_id: string | null;
+    payload: Record<string, unknown>;
+    created_at: string;
+  }>,
+  assistantMessageIds: string[]
+): Map<string, StoredChatMetadata> {
+  const lookup = new Map<string, StoredChatMetadata>();
+  const unlinkedMetadata: StoredChatMetadata[] = [];
+  for (const artifact of [...artifacts].sort((a, b) => a.created_at.localeCompare(b.created_at))) {
+    const metadata = normalizeStoredChatMetadata(artifact.payload);
+    if (!metadata) {
+      continue;
+    }
+    if (artifact.message_id) {
+      lookup.set(artifact.message_id, metadata);
+    } else {
+      unlinkedMetadata.push(metadata);
+    }
+  }
+  for (const metadata of unlinkedMetadata) {
+    const targetId = assistantMessageIds.find((id) => !lookup.has(id));
+    if (targetId) {
+      lookup.set(targetId, metadata);
+    }
+  }
+  return lookup;
+}
+
+function normalizeStoredChatMetadata(payload: Record<string, unknown>): StoredChatMetadata | null {
+  const retrievedSources = toRetrievedSources(payload.retrieved_sources);
+  const citations = toRetrievedSources(payload.citations);
+  const metadata: StoredChatMetadata = {
+    question_type: isQuestionType(payload.question_type) ? payload.question_type : undefined,
+    should_visualize:
+      typeof payload.should_visualize === "boolean" ? payload.should_visualize : undefined,
+    plot_suggestion: isPlotPreviewRequest(payload.plot_suggestion)
+      ? payload.plot_suggestion
+      : null,
+    retrieval_attempted:
+      typeof payload.retrieval_attempted === "boolean" ? payload.retrieval_attempted : undefined,
+    retrieved_sources: retrievedSources,
+    citations
+  };
+  if (
+    metadata.question_type ||
+    metadata.should_visualize !== undefined ||
+    metadata.plot_suggestion ||
+    metadata.retrieval_attempted !== undefined ||
+    retrievedSources.length > 0 ||
+    citations.length > 0
+  ) {
+    return metadata;
+  }
+  return null;
+}
+
 function isPlotPreviewResponse(value: unknown): value is PlotPreviewResponse {
   return (
     typeof value === "object" &&
@@ -1109,6 +1418,29 @@ function isPlotPreviewRequest(value: unknown): value is PlotPreviewRequest {
     "expression" in value &&
     "variables" in value &&
     "ranges" in value
+  );
+}
+
+function toRetrievedSources(value: unknown): RetrievedSource[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.filter(isRetrievedSource);
+}
+
+function isRetrievedSource(value: unknown): value is RetrievedSource {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+  const source = value as Record<string, unknown>;
+  return (
+    typeof source.source_index === "number" &&
+    typeof source.chunk_id === "string" &&
+    typeof source.document_id === "string" &&
+    typeof source.filename === "string" &&
+    typeof source.page_start === "number" &&
+    typeof source.page_end === "number" &&
+    typeof source.snippet === "string"
   );
 }
 
@@ -1140,6 +1472,18 @@ function getPlotTypeLabel(plotType: PlotPreviewResponse["plot_type"]) {
     return "二维区域";
   }
   return "二维函数";
+}
+
+function formatPageRange(source: RetrievedSource) {
+  if (source.page_start === source.page_end) {
+    return `p. ${source.page_start}`;
+  }
+  return `pp. ${source.page_start}-${source.page_end}`;
+}
+
+function upsertDocument(items: DocumentSummary[], document: DocumentSummary): DocumentSummary[] {
+  const withoutExisting = items.filter((item) => item.id !== document.id);
+  return [document, ...withoutExisting];
 }
 
 function formatSessionTime(value: string) {

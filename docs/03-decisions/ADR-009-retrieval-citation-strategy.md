@@ -1,6 +1,6 @@
 # ADR-009: Retrieval Citation Strategy
 
-Status: proposed
+Status: accepted
 
 ## Context
 

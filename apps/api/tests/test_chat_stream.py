@@ -2,14 +2,17 @@ import json
 from collections.abc import AsyncIterator, Sequence
 
 from fastapi.testclient import TestClient
+import fitz
 import pytest
 
 from math_agent_api.core.config import get_settings
+from math_agent_api.db.session import Base
 from math_agent_api.main import app
 from math_agent_api.providers.llm import LLMProviderError
 from math_agent_api.schemas.chat import ChatStreamRequest
 from math_agent_api.schemas.common import QuestionType
 from math_agent_api.services.chat_service import stream_chat_with_provider
+from math_agent_api.services.document_service import ingest_pdf_document
 
 
 @pytest.fixture(autouse=True)
@@ -43,6 +46,82 @@ def test_chat_stream_returns_sse_events() -> None:
     assert metadata["planner"]["question_type"] == metadata["question_type"]
     assert metadata["planner"]["needs_plot"] == metadata["should_visualize"]
     assert metadata["planner"]["needs_retrieval"] is False
+
+
+@pytest.fixture()
+def isolated_database(monkeypatch: pytest.MonkeyPatch, tmp_path):
+    from math_agent_api.db import session as db_session
+
+    database_path = tmp_path / "test.db"
+    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{database_path}")
+    get_settings.cache_clear()
+
+    db_session.engine.dispose()
+    db_session.engine = db_session._create_engine()
+    db_session.SessionLocal.configure(bind=db_session.engine)
+    Base.metadata.create_all(bind=db_session.engine)
+
+    yield db_session
+
+    db_session.engine.dispose()
+    get_settings.cache_clear()
+
+
+@pytest.mark.asyncio
+async def test_chat_stream_returns_retrieved_sources_when_material_matches(isolated_database) -> None:
+    with isolated_database.SessionLocal() as db:
+        ingest_pdf_document(
+            db=db,
+            content=_build_pdf(["Definition. Uniform continuity means one delta controls all x."]),
+            filename="analysis-notes.pdf",
+            content_type="application/pdf",
+        )
+        events = [
+            event
+            async for event in stream_chat_with_provider(
+                request=ChatStreamRequest(
+                    message="根据课本说明 uniform continuity definition",
+                    answer_mode="direct",
+                ),
+                session_id="session-rag",
+                question_type=QuestionType.CONCEPTUAL,
+                provider=FakeProvider(),
+                db=db,
+            )
+        ]
+
+    body = "".join(events)
+    metadata = _first_event_data(body, "metadata")
+
+    assert metadata["planner"]["needs_retrieval"] is True
+    assert metadata["retrieval_attempted"] is True
+    assert metadata["retrieved_sources"][0]["filename"] == "analysis-notes.pdf"
+    assert metadata["citations"][0]["chunk_id"] == metadata["retrieved_sources"][0]["chunk_id"]
+
+
+@pytest.mark.asyncio
+async def test_chat_stream_does_not_fabricate_sources_when_retrieval_is_empty(isolated_database) -> None:
+    with isolated_database.SessionLocal() as db:
+        events = [
+            event
+            async for event in stream_chat_with_provider(
+                request=ChatStreamRequest(
+                    message="根据课本说明 uniform continuity definition",
+                    answer_mode="direct",
+                ),
+                session_id="session-empty-rag",
+                question_type=QuestionType.CONCEPTUAL,
+                provider=FakeProvider(),
+                db=db,
+            )
+        ]
+
+    metadata = _first_event_data("".join(events), "metadata")
+
+    assert metadata["planner"]["needs_retrieval"] is True
+    assert metadata["retrieval_attempted"] is True
+    assert metadata["retrieved_sources"] == []
+    assert metadata["citations"] == []
 
 
 def test_chat_stream_includes_plot_suggestion_for_visualization_question() -> None:
@@ -218,3 +297,11 @@ def _first_event_data(body: str, event_name: str) -> dict:
             if line.startswith("data:"):
                 return json.loads(line.removeprefix("data:").strip())
     raise AssertionError(f"event {event_name} not found")
+
+
+def _build_pdf(pages: list[str]) -> bytes:
+    document = fitz.open()
+    for text in pages:
+        page = document.new_page()
+        page.insert_text((72, 72), text, fontsize=12)
+    return document.tobytes()

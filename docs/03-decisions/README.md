@@ -16,7 +16,7 @@ Accepted ADRs are binding until a later ADR explicitly supersedes them. Do not s
 | `ADR-006-ocr-provider-strategy.md` | accepted | OCR Provider Strategy | Mock-first tests, Doubao Vision preferred live MVP OCR, Mathpix future adapter |
 | `ADR-007-agentic-rag-prototype.md` | accepted | Agentic RAG Prototype Direction | Chat-first course assistant stage, structured planner, local RAG, citations, preferences, memory |
 | `ADR-008-planner-driven-service-pipeline.md` | accepted | Planner-Driven Explicit Service Pipeline | Pydantic planner service drives metadata and future tools without LangGraph in Phase 1 |
-| `ADR-009-retrieval-citation-strategy.md` | proposed | Retrieval Citation Strategy | Local PDF parsing, SQLite chunks, lexical retrieval v1, citation validation, no fabricated sources |
+| `ADR-009-retrieval-citation-strategy.md` | accepted | Retrieval Citation Strategy | Local PDF parsing, SQLite chunks, lexical retrieval v1, citation validation, no fabricated sources |
 
 ## When To Add An ADR
 

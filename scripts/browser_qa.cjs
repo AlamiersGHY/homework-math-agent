@@ -2,6 +2,9 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { chromium } = require("../apps/web/node_modules/playwright");
 
+const SAMPLE_PDF_BASE64 =
+  "JVBERi0xLjcKJcK1wrYKJSBXcml0dGVuIGJ5IE11UERGIDEuMjcuMgoKMSAwIG9iago8PC9UeXBlL0NhdGFsb2cvUGFnZXMgMiAwIFIvSW5mbzw8L1Byb2R1Y2VyKE11UERGIDEuMjcuMik+Pj4+CmVuZG9iagoKMiAwIG9iago8PC9UeXBlL1BhZ2VzL0NvdW50IDEvS2lkc1s0IDAgUl0+PgplbmRvYmoKCjMgMCBvYmoKPDwvRm9udDw8L2hlbHYgNSAwIFI+Pj4+CmVuZG9iagoKNCAwIG9iago8PC9UeXBlL1BhZ2UvTWVkaWFCb3hbMCAwIDU5NSA4NDJdL1JvdGF0ZSAwL1Jlc291cmNlcyAzIDAgUi9QYXJlbnQgMiAwIFIvQ29udGVudHNbNiAwIFJdPj4KZW5kb2JqCgo1IDAgb2JqCjw8L1R5cGUvRm9udC9TdWJ0eXBlL1R5cGUxL0Jhc2VGb250L0hlbHZldGljYS9FbmNvZGluZy9XaW5BbnNpRW5jb2Rpbmc+PgplbmRvYmoKCjYgMCBvYmoKPDwvTGVuZ3RoIDE3NC9GaWx0ZXIvRmxhdGVEZWNvZGU+PgpzdHJlYW0KeNqNj7EOAiEQRHu+gj8QFtiRxFiY2NiZ0BmrO4iFFjZ+/82el9gaiiVvZh/Bvd2puegDT/QQDwTfXm736M+Pj+Lb8LdDzlpUtWrXisw5tEuXUIoRJgOiswRNlqyNjmJdVNKZ25Ek8c5cC6cZJzbjb4uOQWatqJNOEmD9umZGeSPLut8Mg+a4UvJslhm2m5C/bXYLBGo+MyDwjYK0UVrwzw/68d4u7tzc1S0uuUbhCmVuZHN0cmVhbQplbmRvYmoKCnhyZWYKMCA3CjAwMDAwMDAwMDAgNjU1MzUgZiAKMDAwMDAwMDA0MiAwMDAwMCBuIAowMDAwMDAwMTIwIDAwMDAwIG4gCjAwMDAwMDAxNzIgMDAwMDAgbiAKMDAwMDAwMDIxMyAwMDAwMCBuIAowMDAwMDAwMzIwIDAwMDAwIG4gCjAwMDAwMDA0MDkgMDAwMDAgbiAKCnRyYWlsZXIKPDwvU2l6ZSA3L1Jvb3QgMSAwIFIvSURbPEMzQjlDM0FGMERDMzk4MEIxMUMyOUM2NUMyQTVDMzgzPjxDRTcwOEIxQzREOTgxQ0Y0RTU0QzdEQkJCRUU4REU3NT5dPj4Kc3RhcnR4cmVmCjY1MgolJUVPRgo=";
+
 function getArg(name, fallback) {
   const index = process.argv.indexOf(name);
   if (index >= 0 && process.argv[index + 1]) {
@@ -14,6 +17,10 @@ function assertOk(condition, message) {
   if (!condition) {
     throw new Error(message);
   }
+}
+
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 async function assertNoRawDebugText(page) {
@@ -76,6 +83,15 @@ async function waitForText(page, regex, label) {
   assertOk(regex.test(text), label);
 }
 
+async function uploadSamplePdf(page) {
+  const pdfBuffer = Buffer.from(SAMPLE_PDF_BASE64, "base64");
+  await page.locator('input[accept="application/pdf,.pdf"]').setInputFiles({
+    name: "analysis-notes.pdf",
+    mimeType: "application/pdf",
+    buffer: pdfBuffer,
+  });
+}
+
 async function runDesktopFlow(browser, baseUrl, screenshotDir) {
   const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
   const page = await context.newPage();
@@ -86,6 +102,50 @@ async function runDesktopFlow(browser, baseUrl, screenshotDir) {
   await assertNoRawDebugText(page);
   await page.screenshot({ path: path.join(screenshotDir, "desktop-initial.jpg"), type: "jpeg", quality: 84 });
 
+  await uploadSamplePdf(page);
+  await waitForText(page, /analysis-notes\.pdf|\d+ \u4efd\u6750\u6599\u53ef\u88ab\u81ea\u52a8\u68c0\u7d22/, "desktop PDF material was not indexed");
+  const documentList = await page.evaluate(async () => {
+    const response = await fetch("http://127.0.0.1:8011/documents");
+    return response.json();
+  });
+  assertOk(Array.isArray(documentList) && documentList.length === 1, "uploaded PDF was not listed");
+  assertOk(documentList[0].chunk_count >= 1, "uploaded PDF did not create chunks");
+  await assertViewportFit(page, "desktop material upload");
+  await assertNoRawDebugText(page);
+  await page.screenshot({ path: path.join(screenshotDir, "desktop-materials.jpg"), type: "jpeg", quality: 84 });
+
+  await page.locator("textarea").first().fill("根据课本说明 uniform continuity definition");
+  await page.getByRole("button", { name: /^\u53d1\u9001$/ }).click();
+  await waitForText(page, /\u5f15\u7528\u6750\u6599/, "desktop citation panel did not render");
+  await waitForText(page, /analysis-notes\.pdf/, "desktop citation filename did not render");
+  const ragSessions = await page.evaluate(async () => {
+    const response = await fetch("http://127.0.0.1:8011/sessions");
+    return response.json();
+  });
+  assertOk(Array.isArray(ragSessions) && ragSessions.length > 0, "RAG chat session was not persisted");
+  const ragSessionId = ragSessions[0].id;
+  const ragDetail = await page.evaluate(async (id) => {
+    const response = await fetch(`http://127.0.0.1:8011/sessions/${id}`);
+    return response.json();
+  }, ragSessionId);
+  const chatMetadata = ragDetail.artifacts.find((artifact) => artifact.artifact_type === "chat_metadata");
+  assertOk(chatMetadata, "RAG chat metadata artifact was not persisted");
+  assertOk(chatMetadata.payload.retrieval_attempted === true, "RAG metadata did not record retrieval_attempted");
+  assertOk(Array.isArray(chatMetadata.payload.citations) && chatMetadata.payload.citations.length > 0, "RAG metadata did not persist citations");
+  await assertViewportFit(page, "desktop citation answer");
+  await assertNoRawDebugText(page);
+  await page.screenshot({ path: path.join(screenshotDir, "desktop-citations.jpg"), type: "jpeg", quality: 84 });
+
+  await page.reload({ waitUntil: "networkidle" });
+  await page.getByText("Math Agent").waitFor({ timeout: 15000 });
+  await page.getByRole("button", { name: /\u6839\u636e\u8bfe\u672c\u8bf4\u660e uniform continuity/ }).first().click();
+  await waitForText(page, /\u5f15\u7528\u6750\u6599/, "history did not restore citation panel");
+  await waitForText(page, /analysis-notes\.pdf/, "history did not restore citation filename");
+  await assertViewportFit(page, "desktop history citations");
+  await page.screenshot({ path: path.join(screenshotDir, "desktop-history-citations.jpg"), type: "jpeg", quality: 84 });
+
+  await page.getByRole("button", { name: /\u65b0\u5efa/ }).first().click();
+  await page.locator("article").first().waitFor({ state: "detached", timeout: 15000 }).catch(() => undefined);
   await page.getByRole("button", { name: /\u76f4\u63a5\u89e3\u7b54/ }).click();
   await page.locator("textarea").first().fill("Plot z = sin(x*y) as a 3D surface.");
   await page.getByRole("button", { name: /^\u53d1\u9001$/ }).click();
@@ -174,7 +234,7 @@ async function runDesktopFlow(browser, baseUrl, screenshotDir) {
     )
   );
   const messageCountBeforeOcrSend = await page.locator("article").count();
-  await page.locator('input[type="file"]').setInputFiles(imagePath);
+  await page.locator('input[accept="image/png,image/jpeg,image/webp,image/gif"]').setInputFiles(imagePath);
   const ocrTextarea = page.locator("textarea").first();
   await page.waitForFunction(() => {
     const textarea = document.querySelector("textarea");
@@ -211,6 +271,14 @@ async function runDesktopFlow(browser, baseUrl, screenshotDir) {
   await page.getByText("\u65b0\u7684\u5b66\u4e60\u56de\u5408").waitFor({ timeout: 15000 });
   assertOk((await page.locator("article").count()) === 0, "deleted active session did not clear messages");
   await assertViewportFit(page, "desktop after delete");
+
+  const deleteDocumentResponsePromise = page.waitForResponse(
+    (response) => response.url().includes(`/documents/${documentList[0].id}`) && response.request().method() === "DELETE"
+  );
+  await page.getByLabel(new RegExp(`删除材料 ${escapeRegExp(documentList[0].filename)}`)).click();
+  const deleteDocumentResponse = await deleteDocumentResponsePromise;
+  assertOk(deleteDocumentResponse.status() === 204, "document delete did not return 204");
+  await waitForText(page, /\u4e0a\u4f20\u8bfe\u7a0b PDF \u540e/, "material strip did not return to empty state");
 
   await context.close();
 }

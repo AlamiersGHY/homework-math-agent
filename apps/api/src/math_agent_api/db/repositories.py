@@ -4,7 +4,14 @@ from collections.abc import Sequence
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from math_agent_api.db.models import ArtifactRecord, MessageRecord, SessionRecord, utc_now
+from math_agent_api.db.models import (
+    ArtifactRecord,
+    DocumentChunkRecord,
+    DocumentRecord,
+    MessageRecord,
+    SessionRecord,
+    utc_now,
+)
 
 
 class SessionRepository:
@@ -122,3 +129,102 @@ class SessionRepository:
 def _derive_title(content: str) -> str:
     title = " ".join(content.strip().split())
     return title[:60] or "新会话"
+
+
+class DocumentRepository:
+    def __init__(self, db: Session):
+        self.db = db
+
+    def get_document(self, document_id: str) -> DocumentRecord | None:
+        return self.db.get(DocumentRecord, document_id)
+
+    def get_document_by_hash(self, file_hash: str) -> DocumentRecord | None:
+        statement = select(DocumentRecord).where(DocumentRecord.file_hash == file_hash)
+        return self.db.scalars(statement).first()
+
+    def list_documents(self) -> Sequence[DocumentRecord]:
+        statement = select(DocumentRecord).order_by(DocumentRecord.updated_at.desc())
+        return self.db.scalars(statement).all()
+
+    def create_document(
+        self,
+        filename: str,
+        content_type: str,
+        file_hash: str,
+        page_count: int | None,
+        status: str = "ready",
+        error_message: str | None = None,
+        warnings_json: str = "[]",
+    ) -> DocumentRecord:
+        record = DocumentRecord(
+            filename=filename,
+            content_type=content_type,
+            file_hash=file_hash,
+            page_count=page_count,
+            status=status,
+            error_message=error_message,
+            warnings_json=warnings_json,
+        )
+        self.db.add(record)
+        self.db.commit()
+        self.db.refresh(record)
+        return record
+
+    def replace_chunks(self, document_id: str, chunks: list[dict]) -> list[DocumentChunkRecord]:
+        existing_statement = select(DocumentChunkRecord).where(
+            DocumentChunkRecord.document_id == document_id
+        )
+        for existing in self.db.scalars(existing_statement).all():
+            self.db.delete(existing)
+
+        records = [
+            DocumentChunkRecord(
+                document_id=document_id,
+                chunk_index=chunk["chunk_index"],
+                page_start=chunk["page_start"],
+                page_end=chunk["page_end"],
+                section_title=chunk.get("section_title"),
+                text=chunk["text"],
+                text_hash=chunk["text_hash"],
+                token_estimate=chunk["token_estimate"],
+                summary=chunk.get("summary"),
+                retrieval_text=chunk["retrieval_text"],
+            )
+            for chunk in chunks
+        ]
+        self.db.add_all(records)
+        document = self.get_document(document_id)
+        if document:
+            document.updated_at = utc_now()
+        self.db.commit()
+        for record in records:
+            self.db.refresh(record)
+        return records
+
+    def list_chunks_for_document(self, document_id: str) -> Sequence[DocumentChunkRecord]:
+        statement = (
+            select(DocumentChunkRecord)
+            .where(DocumentChunkRecord.document_id == document_id)
+            .order_by(DocumentChunkRecord.chunk_index.asc())
+        )
+        return self.db.scalars(statement).all()
+
+    def list_ready_chunks(self) -> Sequence[DocumentChunkRecord]:
+        statement = (
+            select(DocumentChunkRecord)
+            .join(DocumentRecord)
+            .where(DocumentRecord.status == "ready")
+            .order_by(DocumentChunkRecord.created_at.asc(), DocumentChunkRecord.chunk_index.asc())
+        )
+        return self.db.scalars(statement).all()
+
+    def delete_document(self, document_id: str) -> bool:
+        record = self.get_document(document_id)
+        if not record:
+            return False
+        self.db.delete(record)
+        self.db.commit()
+        return True
+
+    def chunk_count(self, document_id: str) -> int:
+        return len(self.list_chunks_for_document(document_id))

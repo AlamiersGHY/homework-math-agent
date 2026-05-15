@@ -53,13 +53,18 @@
 
 ## Agentic RAG Prototype Additions
 
+Agentic RAG 阶段当前已引入：
+
+- PyMuPDF (`pymupdf`) through a backend document parser provider boundary for local PDF text extraction.
+- SQLite `documents` / `document_chunks` tables for local course-material metadata.
+- Deterministic local lexical retrieval for v1 source lookup and citation metadata.
+
 Agentic RAG 阶段允许后续引入：
 
-- PDF/text extraction dependency，用于本地课程材料解析。
 - Embedding provider interface，用于 local/hybrid retrieval。
 - SQLite document/chunk/profile/memory tables。
 
-引入具体 PDF parsing、embedding、reranking 或迁移工具前，必须更新本文档并按需要新增 ADR。
+引入新的 embedding、reranking、文档 OCR 或迁移工具前，必须更新本文档并按需要新增 ADR。
 
 ## API And Streaming
 

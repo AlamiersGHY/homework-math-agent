@@ -4,6 +4,7 @@ from pydantic import BaseModel, Field
 
 from math_agent_api.schemas.agent_policy import AgentPolicyPlan
 from math_agent_api.schemas.common import AnswerMode, QuestionType
+from math_agent_api.schemas.retrieval import RetrievedSource
 
 
 class ChatContext(BaseModel):
@@ -30,6 +31,9 @@ class MetadataEvent(BaseModel):
     should_visualize: bool
     plot_suggestion: dict[str, Any] | None = None
     planner: AgentPolicyPlan | None = None
+    retrieval_attempted: bool = False
+    retrieved_sources: list[RetrievedSource] = Field(default_factory=list)
+    citations: list[RetrievedSource] = Field(default_factory=list)
 
 
 class DeltaEvent(BaseModel):

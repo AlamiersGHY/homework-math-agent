@@ -23,6 +23,8 @@ export type ChatMessage = {
   answerMode?: AnswerMode | string | null;
   questionType?: QuestionType | string | null;
   source?: string | null;
+  retrievalAttempted?: boolean;
+  retrievedSources?: RetrievedSource[];
   plotSuggestion?: PlotPreviewRequest | null;
   plot?: PlotPreviewResponse | null;
   plotLoading?: boolean;
@@ -54,6 +56,9 @@ export type MetadataEventData = {
   should_visualize: boolean;
   plot_suggestion: PlotPreviewRequest | null;
   planner?: AgentPolicyPlan | null;
+  retrieval_attempted?: boolean;
+  retrieved_sources?: RetrievedSource[];
+  citations?: RetrievedSource[];
 };
 
 export type AgentPolicyPlan = {
@@ -127,6 +132,37 @@ export type OCRRecognizeResponse = {
   confidence: number | null;
   provider: string;
   warnings: string[];
+};
+
+export type DocumentStatus = "ready" | "failed";
+
+export type DocumentSummary = {
+  id: string;
+  filename: string;
+  content_type: string;
+  status: DocumentStatus;
+  page_count: number | null;
+  chunk_count: number;
+  warnings: string[];
+  error_message?: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type DocumentUploadResponse = {
+  document: DocumentSummary;
+};
+
+export type RetrievedSource = {
+  source_index: number;
+  score?: number;
+  chunk_id: string;
+  document_id: string;
+  filename: string;
+  page_start: number;
+  page_end: number;
+  section_title?: string | null;
+  snippet: string;
 };
 
 export type PlotPreviewRequest = {

@@ -87,3 +87,7 @@ Current scaffold implements:
 - `POST /plots/preview` for Plotly-style `function2d`, `surface3d`, and bounded `region2d` previews
 - `GET /sessions`
 - `GET /sessions/{session_id}`
+- `POST /documents/upload`, `GET /documents`, and `DELETE /documents/{id}` for local PDF course materials
+- `POST /retrieval/search` for deterministic local lexical retrieval with citation-safe source metadata
+
+PDF ingestion uses PyMuPDF through a document parser provider boundary. Chat turns whose planner requests course-material retrieval automatically search uploaded PDFs, include retrieved snippets in the prompt, emit `retrieved_sources` / `citations` metadata, and persist that metadata with the assistant message for history replay.

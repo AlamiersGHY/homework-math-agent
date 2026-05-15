@@ -192,3 +192,17 @@
 - Refined the chat-first UI baseline with a quieter session rail, reduced empty space, compact mode controls, cleaner header, and no raw debug/provider metadata in the user-facing surface.
 - Expanded browser QA to cover persisted plot binding, generated plot replay from history, suggestion-only history replay, inline OCR composer flow, plot modal, session deletion, and desktop/mobile viewport fit.
 - Verified `.\scripts\release-check.ps1` on 2026-05-15 17:39 +08: backend pytest, deterministic evals, frontend typecheck/build, mock API smoke, browser QA, and dependency audit advisory completed; audit remains advisory under TD-005.
+
+## PDF RAG And Citation V1
+
+- Accepted and implemented `ADR-009-retrieval-citation-strategy.md` for local-first PDF retrieval and citation safety.
+- Added PyMuPDF-backed PDF parsing behind a document parser provider boundary.
+- Added SQLite document and chunk records with file hash dedupe, page-aware chunk metadata, warnings, and cascade deletion.
+- Added `POST /documents/upload`, `GET /documents`, `DELETE /documents/{document_id}`, and `POST /retrieval/search`.
+- Added deterministic local lexical retrieval that returns structured source metadata and empty results for low-confidence or missing material instead of fabricating sources.
+- Wired planner-triggered retrieval into `POST /chat/stream`; chat metadata now distinguishes retrieval intent, retrieval attempt, retrieved sources, and citations.
+- Injected retrieved snippets into the chat prompt with citation instructions while keeping normal chat resilient when retrieval is empty or unavailable.
+- Persisted citation metadata in `chat_metadata` artifacts so historical sessions restore source cards.
+- Added a compact chat-first materials strip in the frontend for PDF upload/list/delete and source cards under assistant answers.
+- Extended mock API smoke and browser QA to cover PDF upload, retrieval, citation display, citation history replay, material deletion, no raw debug leakage, and desktop/mobile viewport fit.
+- Verified `.\scripts\release-check.ps1` on 2026-05-15 18:10 +08: 47 backend tests passed, deterministic evals passed, frontend typecheck/build passed, mock API smoke passed, browser QA passed with screenshots under `.cache/qa/20260515-181039`, and dependency audit advisory remained tracked under TD-005.

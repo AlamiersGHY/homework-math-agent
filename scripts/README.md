@@ -45,7 +45,7 @@ Still planned:
 - `browser-qa.ps1` rebuilds the frontend with the QA API base URL before starting `next start`; this avoids stale `NEXT_PUBLIC_API_BASE_URL` bundles.
 - `release-check.ps1` treats `npm audit --omit=dev` findings as advisory by default because TD-005 is tracked; pass `-StrictAudit` to fail on audit findings.
 - `release-check.ps1 -LiveLLM` also runs the real OpenAI-compatible LLM smoke when local credentials are configured.
-- `smoke_api.py` forces mock LLM/OCR providers and uses a temporary SQLite file so release smoke does not depend on external keys.
+- `smoke_api.py` forces mock LLM/OCR providers and uses a temporary SQLite file so release smoke does not depend on external keys. It also covers local PDF upload, retrieval, chat citation metadata, and document deletion.
 
 ## Current Status
 

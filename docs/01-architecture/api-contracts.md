@@ -300,15 +300,103 @@ Phase 1 planner metadata 形态：
 - 前端恢复历史会话时应优先使用 session detail 中的 `plot_preview` artifact，而不是重新推导数学表达式。
 - 后端应对表达式解析失败、范围不合法、采样失败给出结构化错误。
 
+## POST /documents/upload
+
+用途：上传本地课程 PDF，提取文本并保存 page-aware chunks，供后续检索使用。
+
+请求：`multipart/form-data`
+
+字段：
+
+- `file`：PDF 文件，必填。
+
+响应 JSON：
+
+```json
+{
+  "document": {
+    "id": "doc-...",
+    "filename": "Analysis Notes.pdf",
+    "content_type": "application/pdf",
+    "status": "ready",
+    "page_count": 12,
+    "chunk_count": 34,
+    "warnings": [],
+    "error_message": null,
+    "created_at": "2026-05-15T00:00:00Z",
+    "updated_at": "2026-05-15T00:00:00Z"
+  }
+}
+```
+
+约定：
+
+- v1 只接受 PDF；非 PDF 返回 `400 document_validation_error`。
+- PDF 解析通过 document parser provider 边界完成，route handler 不直接调用 PyMuPDF。
+- chunk 必须保留真实 `filename`、`page_start`、`page_end`、`section_title`、`chunk_index` 等可引用元数据。
+- 无可提取文本的 PDF 不应伪造 OCR 文本；应返回明确 `failed` 状态或 warnings。
+- 重复上传同一文件 hash 时可以返回已有 document summary，避免重复 chunk。
+
+## GET /documents
+
+用途：列出本地已上传课程材料。
+
+响应：`DocumentSummary[]`，字段同上传响应中的 `document`。
+
+## DELETE /documents/{document_id}
+
+用途：删除本地课程材料及其 chunks。
+
+响应：
+
+- `204 No Content`：删除成功。
+- `404 document_not_found`：文档不存在。
+
+## POST /retrieval/search
+
+用途：对本地上传材料执行 citation-safe 检索。
+
+请求 JSON：
+
+```json
+{
+  "query": "uniform continuity definition",
+  "top_k": 5
+}
+```
+
+响应 JSON：
+
+```json
+{
+  "query": "uniform continuity definition",
+  "results": [
+    {
+      "source_index": 1,
+      "score": 0.42,
+      "chunk_id": "chunk-...",
+      "document_id": "doc-...",
+      "filename": "Analysis Notes.pdf",
+      "page_start": 4,
+      "page_end": 5,
+      "section_title": "Uniform Continuity",
+      "snippet": "..."
+    }
+  ]
+}
+```
+
+约定：
+
+- v1 使用本地 deterministic lexical retrieval；不要求远程 embedding 或向量库。
+- 空库、低相关或检索失败不得伪造来源；应返回空 `results` 或明确 metadata 状态。
+- 前端 citation/source display 只能渲染后端返回的结构化来源，不得从自然语言回答中合成页码、文件名或章节。
+
 ## 后续可选接口
 
-以下接口不属于第一版必需契约，后续做轻量 RAG 或题库时再补充：
+以下接口不属于当前必需契约，后续做偏好、记忆或题库时再补充：
 
-- `POST /documents/upload`
-- `GET /documents`
-- `DELETE /documents/{id}`
 - `POST /documents/{id}/reindex`
-- `POST /retrieval/search`
 - `GET /profile`
 - `POST /profile`
 - `GET /examples`
