@@ -92,6 +92,41 @@ async function uploadSamplePdf(page) {
   });
 }
 
+function writeTinyPng(filePath) {
+  fs.writeFileSync(
+    filePath,
+    Buffer.from(
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=",
+      "base64"
+    )
+  );
+}
+
+async function runDocumentFailureFlow(browser, baseUrl, screenshotDir) {
+  const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
+  const page = await context.newPage();
+  await page.route("**/documents", (route) => route.abort("failed"));
+  await page.goto(baseUrl, { waitUntil: "networkidle" });
+  await page.getByText("Math Agent").waitFor({ timeout: 15000 });
+
+  const bodyText = await page.locator("body").innerText();
+  assertOk(!bodyText.includes("Failed to fetch"), "PDF document connection failure exposed raw Failed to fetch");
+  assertOk(
+    /PDF|材料|课程/.test(bodyText) && /连接|加载|读取|获取|失败|暂时无法/.test(bodyText),
+    "PDF document connection failure did not show an actionable Chinese error"
+  );
+
+  const retryButton = page.getByRole("button", { name: /重试|重新加载|再试一次/ }).first();
+  await retryButton.waitFor({ timeout: 15000 });
+  await page.unroute("**/documents");
+  await retryButton.click();
+  await waitForText(page, /上传课程 PDF 后|PDF 材料|材料可被自动检索/, "PDF document retry did not recover");
+  await assertViewportFit(page, "desktop document failure retry");
+  await page.screenshot({ path: path.join(screenshotDir, "desktop-document-failure-retry.jpg"), type: "jpeg", quality: 84 });
+
+  await context.close();
+}
+
 async function runDesktopFlow(browser, baseUrl, screenshotDir) {
   const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
   const page = await context.newPage();
@@ -147,7 +182,8 @@ async function runDesktopFlow(browser, baseUrl, screenshotDir) {
   await page.getByRole("button", { name: /\u65b0\u5efa/ }).first().click();
   await page.locator("article").first().waitFor({ state: "detached", timeout: 15000 }).catch(() => undefined);
   await page.getByRole("button", { name: /\u76f4\u63a5\u89e3\u7b54/ }).click();
-  await page.locator("textarea").first().fill("Plot z = sin(x*y) as a 3D surface.");
+  await page.locator("textarea").first().fill("Visualize the implicit 3D surface x^2 + y^2 - z^2 = 1.");
+  const automaticPlotRequestPromise = page.waitForRequest((request) => request.url().includes("/plots/preview"));
   await page.getByRole("button", { name: /^\u53d1\u9001$/ }).click();
   await waitForText(page, /\u6ce2\u5cf0|\u66f2\u9762/, "desktop chat answer did not render");
   const sessionsAfterChat = await page.evaluate(async () => {
@@ -157,8 +193,18 @@ async function runDesktopFlow(browser, baseUrl, screenshotDir) {
   assertOk(Array.isArray(sessionsAfterChat) && sessionsAfterChat.length > 0, "session was not persisted");
   const sessionId = sessionsAfterChat[0].id;
 
-  await page.getByRole("button", { name: /\u751f\u6210\u53ef\u89c6\u5316\u56fe\u5f62|\u751f\u6210\u56fe\u5f62/ }).first().click();
+  const automaticPlotRequest = await automaticPlotRequestPromise;
+  const automaticPlotPayload = JSON.parse(automaticPlotRequest.postData() || "{}");
+  assertOk(automaticPlotPayload.plot_type === "surface3d", "implicit 3D question did not request a surface3d plot");
+  assertOk(
+    typeof automaticPlotPayload.expression === "string" && !/sin\s*\(/i.test(automaticPlotPayload.expression),
+    "implicit 3D question used a sin fallback expression"
+  );
   await page.locator(".js-plotly-plot").waitFor({ timeout: 30000 });
+  assertOk(
+    (await page.getByRole("button", { name: /\u751f\u6210\u53ef\u89c6\u5316\u56fe\u5f62|\u751f\u6210\u56fe\u5f62/ }).count()) === 0,
+    "implicit 3D plot required a manual generate click"
+  );
   const plotDetail = await page.evaluate(async (id) => {
     const response = await fetch(`http://127.0.0.1:8011/sessions/${id}`);
     return response.json();
@@ -167,6 +213,11 @@ async function runDesktopFlow(browser, baseUrl, screenshotDir) {
   const plotArtifact = plotDetail.artifacts.find((artifact) => artifact.artifact_type === "plot_preview");
   assertOk(assistantMessage, "assistant message was not persisted");
   assertOk(plotArtifact && plotArtifact.message_id === assistantMessage.id, "plot artifact was not linked to assistant message id");
+  assertOk(
+    plotArtifact.payload?.plot?.plot_type === "surface3d" &&
+      !/sin\s*\(/i.test(String(plotArtifact.payload?.plot?.expression ?? automaticPlotPayload.expression)),
+    "persisted implicit 3D plot fell back to sin"
+  );
   const plotBox = await page.locator(".js-plotly-plot").boundingBox();
   assertOk(plotBox && plotBox.width > 400 && plotBox.height > 250, "desktop plot rendered too small");
   await assertViewportFit(page, "desktop plot");
@@ -185,7 +236,7 @@ async function runDesktopFlow(browser, baseUrl, screenshotDir) {
 
   await page.reload({ waitUntil: "networkidle" });
   await page.getByText("Math Agent").waitFor({ timeout: 15000 });
-  await page.getByRole("button", { name: /Plot z = sin/ }).first().click();
+  await page.getByRole("button", { name: /implicit 3D surface|x\^2 \+ y\^2/ }).first().click();
   await page.locator(".js-plotly-plot").waitFor({ timeout: 30000 });
   assertOk((await page.getByRole("button", { name: /\u751f\u6210\u53ef\u89c6\u5316\u56fe\u5f62/ }).count()) === 0, "history restored only a plot suggestion");
   await assertViewportFit(page, "desktop history plot");
@@ -193,7 +244,7 @@ async function runDesktopFlow(browser, baseUrl, screenshotDir) {
 
   await page.getByRole("button", { name: /\u65b0\u5efa/ }).first().click();
   await page.locator("article").first().waitFor({ state: "detached", timeout: 15000 }).catch(() => undefined);
-  await page.locator("textarea").first().fill("画一下 y = sin(x) 的图像");
+  await page.locator("textarea").first().fill("Draw the graph of y = sin(x).");
   await page.getByRole("button", { name: /^\u53d1\u9001$/ }).click();
   await waitForText(page, /sin\(x\)|\u9898\u76ee\u662f|\u53ef\u89c6\u5316/, "desktop suggestion-only answer did not render");
   await page.locator("article").filter({ hasText: /\u6b63\u5728\u751f\u6210\u56de\u7b54/ }).waitFor({ state: "detached", timeout: 30000 }).catch(() => undefined);
@@ -225,34 +276,50 @@ async function runDesktopFlow(browser, baseUrl, screenshotDir) {
   await page.getByRole("button", { name: /\u65b0\u5efa/ }).first().click();
   await page.locator("article").first().waitFor({ state: "detached", timeout: 15000 }).catch(() => undefined);
 
-  const imagePath = path.join(screenshotDir, "qa-upload.png");
-  fs.writeFileSync(
-    imagePath,
-    Buffer.from(
-      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=",
-      "base64"
-    )
-  );
+  const firstImagePath = path.join(screenshotDir, "qa-attachment-a.png");
+  const secondImagePath = path.join(screenshotDir, "qa-attachment-b.png");
+  writeTinyPng(firstImagePath);
+  writeTinyPng(secondImagePath);
+  let ocrRequestCount = 0;
+  await page.route("**/ocr/recognize", (route) => {
+    ocrRequestCount += 1;
+    route.continue();
+  });
   const messageCountBeforeOcrSend = await page.locator("article").count();
-  await page.locator('input[accept="image/png,image/jpeg,image/webp,image/gif"]').setInputFiles(imagePath);
+  await page
+    .locator('input[accept="image/png,image/jpeg,image/webp,image/gif"]')
+    .setInputFiles([firstImagePath, secondImagePath]);
   const ocrTextarea = page.locator("textarea").first();
-  await page.waitForFunction(() => {
-    const textarea = document.querySelector("textarea");
-    return Boolean(textarea && textarea.value.includes("\\lim"));
-  }, { timeout: 30000 });
+  await page.getByText("qa-attachment-a.png").waitFor({ timeout: 15000 });
+  await page.getByText("qa-attachment-b.png").waitFor({ timeout: 15000 });
+  assertOk((await page.locator('img[src^="blob:"], img[alt*="qa-attachment"]').count()) >= 2, "multi-image upload did not render thumbnail cards");
+  await page.waitForTimeout(1000);
+  assertOk(ocrRequestCount === 0, "OCR ran before the user clicked send");
   assertOk((await page.locator("article").count()) === messageCountBeforeOcrSend, "OCR auto-submitted before user confirmation");
-  assertOk((await ocrTextarea.inputValue()).includes("\\lim"), "OCR text was not copied into composer");
-  await ocrTextarea.fill(`${String.fromCharCode(27714)} $\\\\lim_{x\\\\to 0}\\\\frac{\\\\sin x}{x}$`);
+  assertOk(!(await ocrTextarea.inputValue()).includes("\\lim"), "OCR text appeared in textarea before send");
+
+  await page.getByText("qa-attachment-a.png").click();
+  await page.getByRole("dialog").waitFor({ timeout: 15000 });
+  await waitForText(page, /预览|勾画|标注|图片/, "image attachment preview/drawing modal did not open");
+  await page.screenshot({ path: path.join(screenshotDir, "desktop-image-preview-modal.jpg"), type: "jpeg", quality: 84 });
+  await page.getByRole("button", { name: /关闭|完成|取消/ }).first().click();
+  await page.getByRole("dialog").waitFor({ state: "detached", timeout: 15000 });
+
+  await ocrTextarea.fill("请解这两张图片里的题");
+  const ocrRequestAfterSendPromise = page.waitForRequest((request) => request.url().includes("/ocr/recognize"));
   const chatRequestPromise = page.waitForRequest((request) => request.url().includes("/chat/stream"));
   await page.getByRole("button", { name: /^\u53d1\u9001$/ }).click();
+  await ocrRequestAfterSendPromise;
   const chatRequest = await chatRequestPromise;
   const chatPayload = JSON.parse(chatRequest.postData() || "{}");
+  assertOk(ocrRequestCount >= 2, "send did not OCR every uploaded image");
   assertOk(
     typeof chatPayload.confirmed_ocr_text === "string" && chatPayload.confirmed_ocr_text.includes("\\lim"),
     "OCR-confirmed text was not sent through chat payload"
   );
   await waitForText(page, /\\lim|\u5939\u903c|\u7ed3\u8bba/, "desktop OCR-confirmed chat did not render");
-  assertOk((await page.getByText(/\u5df2\u8bc6\u522b\u4e3a\u53ef\u7f16\u8f91\u6587\u672c/).count()) === 0, "OCR attachment did not clear after send");
+  assertOk((await page.getByText(/qa-attachment-a\.png|qa-attachment-b\.png/).count()) === 0, "image attachments did not clear after send");
+  await page.unroute("**/ocr/recognize");
   await assertNoRawDebugText(page);
   await assertViewportFit(page, "desktop OCR chat");
   await page.screenshot({ path: path.join(screenshotDir, "desktop-ocr-chat.jpg"), type: "jpeg", quality: 84 });
@@ -312,6 +379,7 @@ async function main() {
 
   const browser = await chromium.launch({ headless: true });
   try {
+    await runDocumentFailureFlow(browser, baseUrl, screenshotDir);
     await runDesktopFlow(browser, baseUrl, screenshotDir);
     await runMobileFlow(browser, baseUrl, screenshotDir);
   } finally {

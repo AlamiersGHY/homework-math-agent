@@ -161,6 +161,7 @@ Continue from the verified PDF RAG and citation unit toward planner-driven autom
 - Historical sessions now restore retrieved-source/citation state from persisted `chat_metadata` alongside existing plot suggestions and generated plot previews.
 - Mock API smoke now covers PDF upload, retrieval, citation-bearing chat metadata, document deletion, and empty retrieval after deletion.
 - Browser QA now covers PDF material upload, citation source display, citation history replay, no raw debug metadata leakage, plot history replay, inline OCR, session deletion, material deletion, and desktop/mobile viewport fit. Latest full release validation passed on 2026-05-15 18:10 +08 with screenshots under `.cache/qa/20260515-181039`.
+- Browser QA coverage has been extended for the current acceptance subtask: `/documents` connection failure must avoid raw `Failed to fetch` and expose a Chinese retry path; multi-image attachments must render thumbnail cards without pre-filling OCR text into the textarea; image cards must open a preview/drawing modal; OCR must run only after send and populate `confirmed_ocr_text`; implicit 3D surface prompts must auto-create a persisted Plotly preview without a manual generate click or `sin` fallback.
 
 ## Next Tasks
 
