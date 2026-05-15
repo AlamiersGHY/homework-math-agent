@@ -38,6 +38,12 @@ class MockLLMProvider:
 
 def _build_mock_answer(user_message: str) -> list[str]:
     normalized = user_message.lower().replace(" ", "")
+    if "latex-render-smoke" in normalized or "参数曲面公式渲染样例" in user_message:
+        return [
+            "散度为 $\\\\frac{\\\\partial P}{\\\\partial x}+\\\\frac{\\\\partial Q}{\\\\partial y}+\\\\frac{\\\\partial R}{\\\\partial z}=x^2+y^2+z^2$。",
+            " 三重积分为 $\\\\iiint_\\\\Omega (x^2+y^2+z^2)\\\\,dV = \\\\frac{2\\\\pi a^5}{5}$。",
+        ]
+
     if "sin(x*y)" in normalized or "z=sin" in normalized:
         return [
             "可以把这个问题看成观察曲面 ",

@@ -68,6 +68,26 @@ def test_plot_preview_surface3d_returns_plotly_surface() -> None:
     assert len(payload["spec"]["data"][0]["z"][0]) == 35
 
 
+def test_plot_preview_surface3d_allows_default_radius_parameter_a() -> None:
+    client = TestClient(app)
+
+    response = client.post(
+        "/plots/preview",
+        json={
+            "plot_type": "surface3d",
+            "expression": "sqrt(a^2 - x^2 - y^2)",
+            "variables": ["x", "y"],
+            "ranges": {"x": [-1, 1], "y": [-1, 1]},
+        },
+    )
+    payload = response.json()
+
+    assert response.status_code == 200
+    assert payload["plot_type"] == "surface3d"
+    assert payload["spec"]["data"][0]["type"] == "surface"
+    assert payload["spec"]["data"][0]["z"][17][17] == pytest.approx(1.0)
+
+
 def test_plot_preview_implicit3d_returns_plotly_isosurface() -> None:
     client = TestClient(app)
 

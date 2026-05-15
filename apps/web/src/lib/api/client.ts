@@ -119,5 +119,5 @@ function rememberApiBase(baseUrl: string): void {
 }
 
 function formatNetworkError(attempted: string[], _lastError: unknown): string {
-  return `无法连接后端 API。请确认 FastAPI 已启动，并检查 NEXT_PUBLIC_API_BASE_URL。已尝试：${attempted.join("，")}。`;
+  return `无法连接后端 API。请确认 FastAPI 已启动，并检查 NEXT_PUBLIC_API_BASE_URL。已尝试：${attempted.join("，")}。如果刚修改 apps/web/.env.local，需要重启 Next 前端进程；推荐从仓库根目录运行 .\\scripts\\dev.ps1。`;
 }

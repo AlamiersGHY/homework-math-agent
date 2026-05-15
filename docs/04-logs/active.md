@@ -174,6 +174,11 @@ Continue from the verified PDF RAG, citation, attachment UX, and automatic plot 
 - Browser QA now treats Plotly rendering as a real visual assertion: it captures page/runtime errors and checks the implicit 3D WebGL canvas is painted, while 2D Plotly charts are checked for painted SVG/DOM marks.
 - `apps/web/.env.example`, `README.md`, and `apps/web/README.md` now document that direct frontend runs need `NEXT_PUBLIC_API_BASE_URL`, and that PDF material/RAG uses the same local FastAPI API rather than any separate PDF provider key.
 - `.\scripts\release-check.ps1` passed on 2026-05-15 23:13 +08 after the implicit 3D render/API-base clarification fix: 52 backend tests, deterministic evals, frontend typecheck/build, mock API smoke, browser QA, and dependency audit advisory completed. Browser QA screenshots are under `.cache/qa/20260515-231310`.
+- User feedback on 2026-05-15 identified three follow-up defects: some LLM-formatted LaTeX with double backslashes still leaked as raw/red text instead of rendering through KaTeX, casual upper-hemisphere 3D requests could fail because the planner did not map them to a supported surface and the plot service rejected parameter `a`, and direct frontend runs could still leave the PDF material strip disconnected if Next was not restarted after changing `NEXT_PUBLIC_API_BASE_URL`.
+- Frontend math normalization now also normalizes double-backslash LaTeX commands inside existing math spans, bracketed math, and bare command runs; browser QA restores a formula-heavy session and asserts KaTeX output without raw `\frac{\partial...}` or `\iiint` leakage.
+- The planner now recognizes upper hemisphere 3D/space-graph requests and emits a supported `surface3d` suggestion for `sqrt(a^2 - x^2 - y^2)`; the plot service permits the bounded default demo parameter `a=1.0` while continuing to reject other unsupported names.
+- Frontend API connection errors now explicitly tell users to restart Next after changing `apps/web/.env.local` and recommend the root `.\scripts\dev.ps1` entry; PDF material upload/RAG remains on the same local FastAPI base URL and has no separate PDF API key.
+- `.\scripts\release-check.ps1` passed on 2026-05-15 23:53 +08 after the formula-rendering, upper-hemisphere plot, and API-base diagnostic fix: 55 backend tests, deterministic evals, frontend typecheck/build, mock API smoke including PDF RAG, browser QA including formula rendering and hemisphere Plotly canvas rendering, and dependency audit advisory completed. Browser QA screenshots are under `.cache/qa/20260515-235325`.
 
 ## Next Tasks
 
@@ -195,6 +200,7 @@ Continue from the verified PDF RAG, citation, attachment UX, and automatic plot 
 - `.\scripts\release-check.ps1` passed on 2026-05-15 18:10 +08 after PDF RAG/citation v1: backend pytest, deterministic evals, frontend typecheck/build, mock API smoke, browser QA, and dependency audit advisory completed.
 - `.\scripts\release-check.ps1` passed on 2026-05-15 22:31 +08 after the PDF connection, image attachment UX, and automatic plot execution unit; dependency audit remains advisory under TD-005.
 - `.\scripts\release-check.ps1` passed on 2026-05-15 23:13 +08 after the implicit 3D Plotly render fix and frontend API-base documentation update; dependency audit remains advisory under TD-005.
+- `.\scripts\release-check.ps1` passed on 2026-05-15 23:53 +08 after the formula-rendering, upper-hemisphere plot, and frontend API-base diagnostic fix; dependency audit remains advisory under TD-005.
 
 ## Exit Checklist
 

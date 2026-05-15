@@ -76,6 +76,18 @@ def test_supported_implicit_surface_produces_implicit3d_suggestion() -> None:
     assert plan.plot_suggestion.expression == "x^4 + y^4 + z^4 = 1"
 
 
+def test_upper_hemisphere_request_produces_surface_plot_suggestion() -> None:
+    plan = plan_agent_turn(
+        ChatStreamRequest(message="请顺便帮我画出上半球面的三维空间图", answer_mode="direct")
+    )
+
+    assert plan.question_type == QuestionType.VISUALIZATION
+    assert plan.needs_plot is True
+    assert plan.plot_type == PlotType.SURFACE3D
+    assert plan.plot_suggestion is not None
+    assert plan.plot_suggestion.expression == "sqrt(a^2 - x^2 - y^2)"
+
+
 def test_broad_request_asks_for_clarification_and_records_weak_point() -> None:
     plan = plan_agent_turn(
         ChatStreamRequest(message="我完全不懂数学分析，帮我学一下", answer_mode="guided")

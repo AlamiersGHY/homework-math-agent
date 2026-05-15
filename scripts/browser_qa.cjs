@@ -31,6 +31,15 @@ async function assertNoRawDebugText(page) {
   }
 }
 
+async function assertMathRendered(page, label) {
+  await page.waitForFunction(() => document.querySelectorAll(".katex").length > 0, { timeout: 30000 });
+  const katexCount = await page.locator(".katex").count();
+  assertOk(katexCount > 0, `${label}: no KaTeX formulas rendered`);
+  const bodyText = await page.locator("body").innerText();
+  assertOk(!bodyText.includes("\\frac{\\partial"), `${label}: raw partial derivative LaTeX leaked`);
+  assertOk(!bodyText.includes("\\iiint"), `${label}: raw triple-integral LaTeX leaked`);
+}
+
 function attachRuntimeErrorGuards(page, label) {
   const errors = [];
   page.on("pageerror", (error) => {
@@ -264,6 +273,53 @@ async function runDesktopFlow(browser, baseUrl, screenshotDir) {
   await waitForText(page, /analysis-notes\.pdf/, "history did not restore citation filename");
   await assertViewportFit(page, "desktop history citations");
   await page.screenshot({ path: path.join(screenshotDir, "desktop-history-citations.jpg"), type: "jpeg", quality: 84 });
+
+  await page.getByRole("button", { name: /\u65b0\u5efa/ }).first().click();
+  await page.locator("article").first().waitFor({ state: "detached", timeout: 15000 }).catch(() => undefined);
+  await page.evaluate(async () => {
+    const response = await fetch("http://127.0.0.1:8011/chat/stream", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        message: "latex-render-smoke",
+        answer_mode: "direct",
+        session_id: "session-latex-render-qa"
+      })
+    });
+    await response.text();
+  });
+  const latexSession = await page.evaluate(async () => {
+    const response = await fetch("http://127.0.0.1:8011/sessions/session-latex-render-qa");
+    return response.json();
+  });
+  const latexAssistant = latexSession.messages.find((message) => message.role === "assistant");
+  await page.evaluate(async (messageId) => {
+    await fetch(`http://127.0.0.1:8011/sessions/session-latex-render-qa`);
+    return messageId;
+  }, latexAssistant?.id);
+  await page.reload({ waitUntil: "networkidle" });
+  await page.getByText("Math Agent").waitFor({ timeout: 15000 });
+  await page.getByRole("button", { name: /latex-render-smoke/ }).first().click();
+  await waitForText(page, /散度为|triple-integral|三重积分/, "formula smoke answer did not load");
+  await assertMathRendered(page, "desktop formula rendering");
+  await page.screenshot({ path: path.join(screenshotDir, "desktop-formula-rendering.jpg"), type: "jpeg", quality: 84 });
+
+  await page.getByRole("button", { name: /\u65b0\u5efa/ }).first().click();
+  await page.locator("article").first().waitFor({ state: "detached", timeout: 15000 }).catch(() => undefined);
+  await page.locator("textarea").first().fill("请顺便帮我画出上半球面的三维空间图");
+  const hemispherePlotRequestPromise = page.waitForRequest((request) => request.url().includes("/plots/preview"));
+  await page.getByRole("button", { name: /^\u53d1\u9001$/ }).click();
+  await waitForText(page, /上半球|曲面|图形|步骤/, "desktop hemisphere answer did not render");
+  const hemispherePlotRequest = await hemispherePlotRequestPromise;
+  const hemispherePlotPayload = JSON.parse(hemispherePlotRequest.postData() || "{}");
+  assertOk(hemispherePlotPayload.plot_type === "surface3d", "hemisphere request did not use surface3d");
+  assertOk(
+    hemispherePlotPayload.expression === "sqrt(a^2 - x^2 - y^2)",
+    "hemisphere request did not use the expected parameterized surface"
+  );
+  await assertPlotlyCanvasPainted(page, page.locator(".js-plotly-plot").first(), "desktop hemisphere plot");
+  await assertViewportFit(page, "desktop hemisphere plot");
+  await page.screenshot({ path: path.join(screenshotDir, "desktop-hemisphere-plot.jpg"), type: "jpeg", quality: 84 });
 
   await page.getByRole("button", { name: /\u65b0\u5efa/ }).first().click();
   await page.locator("article").first().waitFor({ state: "detached", timeout: 15000 }).catch(() => undefined);

@@ -27,6 +27,7 @@ ALLOWED_FUNCTIONS: dict[str, Callable[..., float]] = {
     "tanh": math.tanh,
 }
 ALLOWED_CONSTANTS = {"e": math.e, "pi": math.pi}
+DEFAULT_PARAMETER_VALUES = {"a": 1.0}
 MAX_SAMPLES_2D = 120
 MAX_SAMPLES_3D_AXIS = 35
 
@@ -321,17 +322,31 @@ def _compile_expression(expression: str, variables: set[str]):
     except SyntaxError as exc:
         raise PlotValidationError("Expression is not valid syntax.") from exc
 
-    allowed_names = variables | set(ALLOWED_FUNCTIONS) | set(ALLOWED_CONSTANTS)
+    parameter_names = _parameter_names(expression, variables)
+    allowed_names = variables | parameter_names | set(ALLOWED_FUNCTIONS) | set(ALLOWED_CONSTANTS)
     for node in ast.walk(tree):
         _validate_node(node, allowed_names)
 
     compiled = compile(tree, "<plot-expression>", "eval")
 
     def evaluate(values: dict[str, float]) -> float:
-        namespace = {**ALLOWED_FUNCTIONS, **ALLOWED_CONSTANTS, **values}
+        parameters = {name: DEFAULT_PARAMETER_VALUES[name] for name in parameter_names}
+        namespace = {**ALLOWED_FUNCTIONS, **ALLOWED_CONSTANTS, **parameters, **values}
         return float(eval(compiled, {"__builtins__": {}}, namespace))
 
     return evaluate
+
+
+def _parameter_names(expression: str, variables: set[str]) -> set[str]:
+    normalized = expression.replace("^", "**").strip()
+    try:
+        tree = ast.parse(normalized, mode="eval")
+    except SyntaxError:
+        return set()
+    names = {node.id for node in ast.walk(tree) if isinstance(node, ast.Name)}
+    reserved = variables | set(ALLOWED_FUNCTIONS) | set(ALLOWED_CONSTANTS)
+    parameters = names - reserved
+    return parameters & set(DEFAULT_PARAMETER_VALUES)
 
 
 def _validate_node(node: ast.AST, allowed_names: set[str]) -> None:

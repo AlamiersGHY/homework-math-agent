@@ -88,6 +88,15 @@ def create_plot_suggestion(message: str, question_type: QuestionType) -> PlotSug
         return None
 
     normalized = message.replace(" ", "").lower()
+    if _looks_like_upper_hemisphere(message, normalized):
+        return PlotSuggestion(
+            plot_type=PlotType.SURFACE3D,
+            expression="sqrt(a^2 - x^2 - y^2)",
+            variables=["x", "y"],
+            ranges={"x": (-1, 1), "y": (-1, 1)},
+            source="agent",
+        )
+
     if _looks_like_region2d(message):
         return PlotSuggestion(
             plot_type=PlotType.REGION2D,
@@ -160,7 +169,7 @@ def _is_off_topic(message: str, normalized: str) -> bool:
 
 def _is_visualization_request(message: str, normalized: str) -> bool:
     return (
-        any(token in message for token in ["画", "图像", "曲面", "区域", "可视化"])
+        any(token in message for token in ["画", "图像", "图形", "曲面", "区域", "可视化", "三维", "空间图"])
         or any(token in normalized for token in ["draw", "graph", "visualize", "plot", "surface"])
         or "z=" in normalized
     )
@@ -256,6 +265,13 @@ def _looks_like_function2d(message: str, normalized: str) -> bool:
     if "z=" in normalized:
         return False
     return any(marker in normalized for marker in ["y=", "f(x)=", "graphof", "graphoff"])
+
+
+def _looks_like_upper_hemisphere(message: str, normalized: str) -> bool:
+    return (
+        ("上半球" in message or "hemisphere" in normalized)
+        and ("三维" in message or "空间" in message or "3d" in normalized or "surface" in normalized)
+    )
 
 
 def _extract_region_expression(message: str) -> str:
