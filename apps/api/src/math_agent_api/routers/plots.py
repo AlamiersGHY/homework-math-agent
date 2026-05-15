@@ -18,7 +18,7 @@ async def plot_preview(
 ) -> PlotPreviewResponse | JSONResponse:
     try:
         response = create_plot_preview(request)
-        append_artifact(
+        artifact = append_artifact(
             db=db,
             session_id=request.session_id,
             artifact_type="plot_preview",
@@ -28,6 +28,16 @@ async def plot_preview(
             },
             message_id=request.message_id,
         )
+        if request.session_id and artifact is None:
+            return JSONResponse(
+                status_code=404,
+                content={
+                    "error": ErrorBody(
+                        code="session_not_found",
+                        message="Plot preview was generated but could not be attached because the session was not found.",
+                    ).model_dump(mode="json")
+                },
+            )
         return response
     except PlotValidationError as exc:
         return JSONResponse(

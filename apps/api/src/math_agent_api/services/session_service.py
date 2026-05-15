@@ -1,5 +1,4 @@
 import json
-from collections.abc import Sequence
 from uuid import uuid4
 
 from sqlalchemy.orm import Session
@@ -62,10 +61,11 @@ def get_session_detail(db: Session, session_id: str) -> SessionDetail | None:
     if not session:
         return None
     messages = repo.list_messages(session_id)
+    artifacts = repo.list_artifacts(session_id)
     return SessionDetail(
         session=_session_summary(session),
         messages=[_stored_message(message) for message in messages],
-        artifacts=[_stored_artifact(artifact) for artifact in session.artifacts],
+        artifacts=[_stored_artifact(artifact) for artifact in artifacts],
     )
 
 

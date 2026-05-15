@@ -164,3 +164,46 @@ def test_plot_preview_persists_artifact_when_session_is_known(isolated_database)
     assert len(payload["artifacts"]) == 1
     assert payload["artifacts"][0]["artifact_type"] == "plot_preview"
     assert payload["artifacts"][0]["payload"]["plot"]["plot_type"] == "surface3d"
+
+
+def test_plot_preview_persists_message_id_when_provided(isolated_database) -> None:
+    with isolated_database.SessionLocal() as db:
+        ensure_session(db, "session-plot-message", default_answer_mode="direct")
+
+    client = TestClient(app)
+    response = client.post(
+        "/plots/preview",
+        json={
+            "plot_type": "surface3d",
+            "expression": "sin(x*y)",
+            "variables": ["x", "y"],
+            "ranges": {"x": [-3, 3], "y": [-3, 3]},
+            "session_id": "session-plot-message",
+            "message_id": "assistant-message-opaque",
+        },
+    )
+
+    assert response.status_code == 200
+
+    detail = client.get("/sessions/session-plot-message")
+    artifact = detail.json()["artifacts"][0]
+
+    assert artifact["artifact_type"] == "plot_preview"
+    assert artifact["message_id"] == "assistant-message-opaque"
+
+
+def test_plot_preview_returns_404_when_session_id_is_unknown(isolated_database) -> None:
+    client = TestClient(app)
+    response = client.post(
+        "/plots/preview",
+        json={
+            "plot_type": "surface3d",
+            "expression": "sin(x*y)",
+            "variables": ["x", "y"],
+            "ranges": {"x": [-3, 3], "y": [-3, 3]},
+            "session_id": "missing-session",
+        },
+    )
+
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "session_not_found"

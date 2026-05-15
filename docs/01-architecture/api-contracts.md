@@ -208,6 +208,14 @@ Phase 1 planner metadata 形态：
 }
 ```
 
+约定：
+
+- `messages` 应返回该会话的完整本地消息历史，按 `created_at` 升序排列；不得用固定 50 条截断作为默认详情行为。
+- `artifacts` 应按 `created_at` 升序返回，便于前端稳定恢复历史状态。
+- `artifact_type="chat_metadata"` 可保存该 assistant message 对应的 planner 元数据、题型、可视化意图等恢复信息。
+- `artifact_type="plot_suggestion"` 可保存尚未生成 plot preview 的可视化建议；前端恢复历史会话时应继续展示生成入口。
+- `artifact_type="plot_preview"` 保存已生成图形，`message_id` 应优先指向对应 assistant message；前端可对旧的无 `message_id` artifacts 做兼容恢复，但新写入不应依赖无绑定状态。
+
 ## DELETE /sessions/{session_id}
 
 用途：删除本地 SQLite 会话及其 messages/artifacts。
@@ -288,6 +296,7 @@ Phase 1 planner metadata 形态：
 - `function2d` 至少需要一个变量和一个范围。
 - `surface3d` 至少需要两个变量和两个范围。
 - 当 `session_id` 对应本地会话存在时，后端会把 plot preview 作为 `plot_preview` artifact 保存到该会话；`message_id` 用于把图形关联到对应 assistant message。
+- 当请求包含 `session_id` 但该会话不存在时，接口应返回统一错误 JSON，例如 `404` / `session_not_found`，不能静默返回一个看似已保存的结果。
 - 前端恢复历史会话时应优先使用 session detail 中的 `plot_preview` artifact，而不是重新推导数学表达式。
 - 后端应对表达式解析失败、范围不合法、采样失败给出结构化错误。
 

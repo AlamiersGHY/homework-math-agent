@@ -180,3 +180,15 @@
 - Updated deterministic evals and backend tests so planner behavior is checked for concept, proof, computation, OCR-confirmed, visualization, broad clarification, off-topic, and citation-safety-adjacent cases.
 - Verified `.\scripts\check.ps1` on 2026-05-15 15:19 +08: backend pytest, deterministic evals, frontend typecheck, and frontend production build passed.
 - Verified `.\scripts\release-check.ps1` on 2026-05-15 15:20 +08: backend pytest, deterministic evals, frontend typecheck/build, mock API smoke, browser QA, and dependency audit advisory completed.
+
+## Session State Restoration And RAG Foundation UI
+
+- Reclassified the current RAG/agent state honestly in SDD: planner/API metadata was complete, but PDF ingestion, retrieval, citations, preferences, memory, and automatic retrieval execution were not yet implemented.
+- Added `ADR-009-retrieval-citation-strategy.md` as the proposed local-first PDF retrieval and citation safety strategy for the next RAG unit.
+- Updated session detail behavior so local history returns full ordered messages and ordered artifacts instead of a fixed 50-message detail slice.
+- Persisted assistant-turn `chat_metadata` and `plot_suggestion` artifacts so historical sessions can restore planner/visualization state even when the user had not generated a plot yet.
+- Made plot preview persistence fail explicitly for unknown sessions and kept generated plot artifacts linked to stable assistant message IDs.
+- Updated the frontend history restore path to recover generated plots and plot suggestions, stop parsing message ID prefixes, and tolerate older unlinked plot artifacts.
+- Refined the chat-first UI baseline with a quieter session rail, reduced empty space, compact mode controls, cleaner header, and no raw debug/provider metadata in the user-facing surface.
+- Expanded browser QA to cover persisted plot binding, generated plot replay from history, suggestion-only history replay, inline OCR composer flow, plot modal, session deletion, and desktop/mobile viewport fit.
+- Verified `.\scripts\release-check.ps1` on 2026-05-15 17:39 +08: backend pytest, deterministic evals, frontend typecheck/build, mock API smoke, browser QA, and dependency audit advisory completed; audit remains advisory under TD-005.

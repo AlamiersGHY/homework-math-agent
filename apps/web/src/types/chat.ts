@@ -19,6 +19,10 @@ export type ChatMessage = {
   role: ChatRole;
   content: string;
   status?: "streaming" | "done" | "error";
+  persisted?: boolean;
+  answerMode?: AnswerMode | string | null;
+  questionType?: QuestionType | string | null;
+  source?: string | null;
   plotSuggestion?: PlotPreviewRequest | null;
   plot?: PlotPreviewResponse | null;
   plotLoading?: boolean;

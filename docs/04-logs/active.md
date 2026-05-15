@@ -6,7 +6,7 @@ Agentic RAG Prototype / Intelligent Course Assistant Prototype.
 
 ## Current Goal
 
-Phase 1 planner skeleton is implemented and release-validated. The planner now emits structured decisions for retrieval, plotting, clarification, answer mode, memory action, and reason while keeping full PDF RAG, citations, preferences, and memory writes out of this completion unit.
+Begin the PDF ingestion + retrieval v1 unit for the Agentic RAG prototype. The verified session-history/UI foundation is now in place, so the next coherent implementation unit should add local document upload, page-aware extraction/chunking, retrieval APIs, and citation-safe chat metadata without turning the product into a manual knowledge-base workbench.
 
 ## Relevant Docs
 
@@ -28,6 +28,7 @@ Phase 1 planner skeleton is implemented and release-validated. The planner now e
 - `docs/03-decisions/ADR-006-ocr-provider-strategy.md`
 - `docs/03-decisions/ADR-007-agentic-rag-prototype.md`
 - `docs/03-decisions/ADR-008-planner-driven-service-pipeline.md`
+- `docs/03-decisions/ADR-009-retrieval-citation-strategy.md`
 - `docs/03-decisions/README.md`
 - `docs/02-workflow/planning-workflow.md`
 - `docs/02-workflow/definition-of-done.md`
@@ -136,11 +137,19 @@ Phase 1 planner skeleton is implemented and release-validated. The planner now e
 - Chat SSE metadata now keeps existing top-level `question_type`, `should_visualize`, and `plot_suggestion` fields while adding additive `planner` metadata.
 - Planner decisions are covered by unit tests and deterministic evals for concept retrieval intent, proof guidance, OCR-confirmed input, visualization, broad clarification, off-topic input, and bounded plot scope.
 - Frontend chat types now understand planner metadata and the expanded question-type enum; the UI still consumes the existing chat-first metadata surface rather than showing raw planner debug panels.
+- User feedback on 2026-05-15 identified that RAG/agent work was not yet full-chain: the current implemented state is only planner/API metadata, not PDF ingestion, retrieval, citations, profile/preferences, memory, or automatic retrieval execution.
+- User feedback also identified a blocking session-history defect: historical sessions can miss full chat history and no longer restore plot/3D state reliably because session detail truncates messages, chat metadata is not persisted, plot suggestions are not recoverable, and plot artifacts can be unbound from assistant messages.
+- Current work is organized as explicit deliverable units: (1) session-state restoration and UI polish, (2) retrieval/citation ADR and API contract update, (3) PDF ingestion/retrieval v1, (4) citation-aware chat integration and frontend citation display, then (5) automatic tool execution polish.
+- Session-state restoration and UI foundation are now implemented and release-validated: session detail returns full ordered messages and artifacts, chat persists `chat_metadata` and `plot_suggestion`, generated plots are linked to assistant message IDs, historical plot suggestions and previews restore in the UI, and browser QA covers history plot replay, suggestion-only replay, OCR-in-composer, plot modal, deletion, and desktop/mobile viewport fit.
+- `ADR-009` now proposes the retrieval/citation strategy: PyMuPDF behind a parser provider boundary, SQLite `documents` / `document_chunks`, local lexical retrieval v1, backend-owned citation validation, and no fabricated filename/page/section metadata.
 
 ## Next Tasks
 
-- Create a local Git checkpoint for the planner implementation unit.
-- Before starting Phase 4.2 PDF ingestion/retrieval, add or update a retrieval/citation strategy ADR covering PDF parsing, chunk metadata, retrieval method, citation safety, and dependency choices.
+- Finalize the API contract for `POST /documents/upload`, `GET /documents`, `DELETE /documents/{id}`, and `POST /retrieval/search` before implementing routes.
+- Implement PDF ingestion/retrieval v1 through service/provider/repository boundaries: document parser provider, SQLite document/chunk tables, deterministic chunking, local lexical retrieval, and no remote embedding dependency.
+- Add frontend Materials entry that stays chat-first: upload PDF, show processing status/list/delete, and avoid a full document workbench.
+- Add backend tests and evals for ingestion, retrieval, empty retrieval/no fabricated citations, and retrieval failure not breaking chat.
+- After retrieval v1 is verified, wire retrieved sources into `POST /chat/stream` metadata and frontend citation display as the next unit.
 - Defer live Doubao OCR smoke until the configured `DOUBAO_VISION_MODEL` points to an accessible Ark endpoint.
 
 ## Blockers
@@ -149,9 +158,10 @@ Phase 1 planner skeleton is implemented and release-validated. The planner now e
 - Doubao OCR live smoke additionally requires a vision-capable model or endpoint id in `DOUBAO_VISION_MODEL`.
 - Mathpix is not the active OCR provider because the user does not accept its current setup/billing requirement for this MVP; keep it as a future adapter path only.
 - `npm audit` still reports 2 moderate findings through the current Next/PostCSS dependency chain; do not run `npm audit fix --force` without a release dependency review.
-- PDF ingestion, retrieval, citations, preferences, and memory are accepted next-stage scope but not part of Phase 1 planner completion.
+- PDF ingestion, retrieval, citations, preferences, and memory are accepted next-stage scope but are not yet implemented beyond planner intent metadata.
 - `.\scripts\check.ps1` passed on 2026-05-15 15:19 +08 after moving pytest temporary directories to the system temp path to avoid Windows cache-directory permission locks.
 - `.\scripts\release-check.ps1` passed on 2026-05-15 15:20 +08: backend pytest, deterministic evals, frontend typecheck/build, mock API smoke, browser QA, and dependency audit advisory completed.
+- `.\scripts\release-check.ps1` passed on 2026-05-15 17:39 +08 after the session-history/UI foundation unit: backend pytest, deterministic evals, frontend typecheck/build, mock API smoke, browser QA, and dependency audit advisory completed.
 
 ## Exit Checklist
 

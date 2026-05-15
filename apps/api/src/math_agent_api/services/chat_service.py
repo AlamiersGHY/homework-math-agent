@@ -25,7 +25,12 @@ from math_agent_api.services.agent_policy_planner import (
     plan_agent_turn,
     should_visualize as _should_visualize,
 )
-from math_agent_api.services.session_service import append_message, create_session_id, ensure_session
+from math_agent_api.services.session_service import (
+    append_artifact,
+    append_message,
+    create_session_id,
+    ensure_session,
+)
 
 
 def classify_question(message: str) -> QuestionType:
@@ -189,6 +194,27 @@ async def stream_chat_with_provider(
             question_type=plan.question_type,
             source=getattr(provider, "name", "unknown"),
         )
+        if assistant_record:
+            append_artifact(
+                db=db,
+                session_id=session_id,
+                artifact_type="chat_metadata",
+                payload={
+                    "question_type": plan.question_type,
+                    "should_visualize": plan.needs_plot,
+                    "plot_suggestion": plot_suggestion,
+                    "planner": plan.model_dump(mode="json"),
+                },
+                message_id=assistant_record.id,
+            )
+            if plot_suggestion:
+                append_artifact(
+                    db=db,
+                    session_id=session_id,
+                    artifact_type="plot_suggestion",
+                    payload={"plot_suggestion": plot_suggestion},
+                    message_id=assistant_record.id,
+                )
         yield format_sse(
             "done",
             DoneEvent(

@@ -160,15 +160,29 @@ export function ChatWorkspace() {
 
     try {
       const detail = await getSession(sessionId);
+      const assistantIds = detail.messages
+        .filter((message) => message.role === "assistant")
+        .map((message) => message.id);
       const plotLookup = buildPlotLookup(
-        detail.artifacts.filter((artifact) => artifact.artifact_type === "plot_preview")
+        detail.artifacts.filter((artifact) => artifact.artifact_type === "plot_preview"),
+        assistantIds
       );
-      const loadedMessages = detail.messages.map((message) => ({
+      const suggestionLookup = buildPlotSuggestionLookup(
+        detail.artifacts.filter((artifact) => artifact.artifact_type === "plot_suggestion"),
+        assistantIds
+      );
+      const loadedMessages: ChatMessage[] = detail.messages.map((message) => ({
         id: message.id,
         role: message.role,
         content: message.content,
         status: "done" as const,
-        plot: message.role === "assistant" ? plotLookup.get(message.id) ?? null : null
+        persisted: true,
+        answerMode: message.answer_mode,
+        questionType: message.question_type,
+        source: message.source,
+        plot: message.role === "assistant" ? plotLookup.get(message.id) ?? null : null,
+        plotSuggestion:
+          message.role === "assistant" ? suggestionLookup.get(message.id) ?? null : null
       }));
 
       setMessages(loadedMessages);
@@ -179,7 +193,8 @@ export function ChatWorkspace() {
           detail.session.default_answer_mode === "direct" ||
           detail.session.default_answer_mode === "hint"
             ? detail.session.default_answer_mode
-            : "guided"
+            : "guided",
+        questionType: latestQuestionType(loadedMessages)
       });
       setError(null);
       setAttachment({ status: "idle" });
@@ -222,14 +237,16 @@ export function ChatWorkspace() {
       id: createId("user"),
       role: "user",
       content: actualText,
-      status: "done"
+      status: "done",
+      persisted: false
     };
     const assistantId = createId("assistant");
     const assistantMessage: ChatMessage = {
       id: assistantId,
       role: "assistant",
       content: "",
-      status: "streaming"
+      status: "streaming",
+      persisted: false
     };
 
     setMessages((current) => [...current, userMessage, assistantMessage]);
@@ -268,7 +285,9 @@ export function ChatWorkspace() {
             if (data.user_message_id) {
               setMessages((current) =>
                 current.map((item) =>
-                  item.id === userMessage.id ? { ...item, id: data.user_message_id as string } : item
+                  item.id === userMessage.id
+                    ? { ...item, id: data.user_message_id as string, persisted: true }
+                    : item
                 )
               );
             }
@@ -318,7 +337,8 @@ export function ChatWorkspace() {
                   ? {
                       ...item,
                       id: data.assistant_message_id ?? item.id,
-                      status: "done"
+                      status: "done",
+                      persisted: Boolean(data.assistant_message_id)
                     }
                   : item
               )
@@ -391,6 +411,7 @@ export function ChatWorkspace() {
   }
 
   async function generatePlot(messageId: string, request: PlotPreviewRequest) {
+    const targetMessage = messages.find((message) => message.id === messageId);
     setMessages((current) =>
       current.map((item) =>
         item.id === messageId ? { ...item, plotLoading: true, plotError: null } : item
@@ -401,7 +422,7 @@ export function ChatWorkspace() {
       const plot = await createPlotPreview({
         ...request,
         session_id: metadata.sessionId,
-        message_id: messageId.startsWith("msg-") ? messageId : null
+        message_id: targetMessage?.persisted ? messageId : null
       });
       setMessages((current) =>
         current.map((item) =>
@@ -443,7 +464,7 @@ export function ChatWorkspace() {
   }
 
   return (
-    <main className="h-dvh overflow-hidden bg-[#f6f7f4] text-neutral-950">
+    <main className="h-dvh overflow-hidden bg-[#f4f5f0] text-neutral-950">
       <div className="flex h-full min-h-0">
         <SessionRail
           activeSessionId={metadata.sessionId}
@@ -454,19 +475,19 @@ export function ChatWorkspace() {
           sessions={sessions}
         />
 
-        <section className="flex min-w-0 flex-1 flex-col">
-          <header className="shrink-0 border-b border-neutral-200 bg-white/95 px-4 py-3 backdrop-blur sm:px-6">
-            <div className="mx-auto flex max-w-6xl items-center justify-between gap-4">
+        <section className="flex min-w-0 flex-1 flex-col bg-[linear-gradient(180deg,#fbfbf8_0%,#f4f5f0_100%)]">
+          <header className="shrink-0 border-b border-neutral-200 bg-white/90 px-4 py-3 backdrop-blur sm:px-6">
+            <div className="mx-auto flex max-w-5xl items-center justify-between gap-4">
               <div className="flex min-w-0 items-center gap-3">
-                <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-neutral-950 text-sm font-semibold text-white">
+                <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-neutral-950 text-sm font-semibold text-white shadow-sm">
                   M
                 </span>
                 <div className="min-w-0">
-                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-700">
+                  <p className="text-xs font-semibold uppercase text-emerald-700">
                     Math Agent
                   </p>
-                  <h1 className="truncate text-lg font-semibold tracking-normal text-neutral-950 sm:text-2xl">
-                    数学分析学习工作台
+                  <h1 className="truncate text-base font-semibold tracking-normal text-neutral-950 sm:text-xl">
+                    智能课程助教
                   </h1>
                 </div>
               </div>
@@ -493,7 +514,7 @@ export function ChatWorkspace() {
           />
 
           <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-6" ref={transcriptRef}>
-            <div className="mx-auto flex min-h-full max-w-6xl flex-col">
+            <div className="mx-auto flex min-h-full max-w-5xl flex-col">
               {messages.length === 0 ? (
                 <Starter
                   onPickExample={(example) => {
@@ -502,7 +523,7 @@ export function ChatWorkspace() {
                   }}
                 />
               ) : (
-                <div className="space-y-5 pb-6">
+                <div className="space-y-4 pb-6">
                   {messages.map((message) => (
                     <MessageBubble
                       key={message.id}
@@ -567,23 +588,20 @@ function SessionRail({
   sessions: SessionSummary[];
 }) {
   return (
-    <aside className="hidden w-80 shrink-0 border-r border-neutral-200 bg-[#111312] text-white lg:flex lg:flex-col">
+    <aside className="hidden w-72 shrink-0 border-r border-neutral-200 bg-[#181a18] text-white lg:flex lg:flex-col">
       <div className="border-b border-white/10 p-4">
-        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-white/45">
-          Sessions
-        </p>
-        <p className="mt-2 text-sm leading-6 text-white/70">
-          本机学习记录，用于回看题目、回答和图形。
+        <p className="text-xs font-semibold uppercase text-white/45">
+          Local Sessions
         </p>
         <button
-          className="mt-4 h-11 w-full rounded-md bg-white px-3 text-sm font-semibold text-neutral-950 transition hover:bg-emerald-50"
+          className="mt-3 h-10 w-full rounded-md bg-white px-3 text-sm font-semibold text-neutral-950 transition hover:bg-emerald-50"
           onClick={onNewSession}
           type="button"
         >
           新建会话
         </button>
       </div>
-      <div className="min-h-0 flex-1 overflow-y-auto p-3">
+      <div className="min-h-0 flex-1 overflow-y-auto p-2.5">
         <div className="space-y-1">
           {sessions.length === 0 ? (
             <p className="rounded-md px-3 py-3 text-sm leading-6 text-white/50">
@@ -622,20 +640,22 @@ function SessionRow({
 }) {
   return (
     <div
-      className={`group flex items-start gap-2 rounded-md px-2 py-2 transition ${
-        active ? "bg-emerald-400 text-neutral-950" : "text-white/75 hover:bg-white/10 hover:text-white"
+      className={`group flex items-start gap-2 rounded-md px-2.5 py-2.5 transition ${
+        active
+          ? "bg-white text-neutral-950 shadow-sm"
+          : "text-white/70 hover:bg-white/10 hover:text-white"
       }`}
     >
       <button className="min-w-0 flex-1 text-left text-sm leading-5" onClick={onPick} type="button">
         <span className="line-clamp-2 font-medium">{session.title ?? "未命名会话"}</span>
-        <span className={`mt-1 block text-xs ${active ? "text-neutral-700" : "text-white/40"}`}>
+        <span className={`mt-1 block text-xs ${active ? "text-neutral-500" : "text-white/40"}`}>
           {formatSessionTime(session.updated_at)}
         </span>
       </button>
       <button
         aria-label="删除会话"
-        className={`h-7 w-7 shrink-0 rounded text-sm transition ${
-          active ? "text-neutral-700 hover:bg-black/10" : "text-white/45 hover:bg-white/10 hover:text-white"
+        className={`h-7 w-7 shrink-0 rounded-md text-sm opacity-0 transition group-hover:opacity-100 focus:opacity-100 ${
+          active ? "text-neutral-500 hover:bg-black/10" : "text-white/45 hover:bg-white/10 hover:text-white"
         }`}
         onClick={(event) => {
           event.stopPropagation();
@@ -730,20 +750,17 @@ function Starter({
   onPickExample: (example: (typeof examples)[number]) => void;
 }) {
   return (
-    <div className="flex flex-1 flex-col justify-start gap-6 py-4 sm:justify-center sm:py-8">
+    <div className="flex flex-1 flex-col justify-center gap-6 py-4 sm:py-8">
       <div>
-        <p className="text-sm font-semibold text-emerald-700">开始一个学习回合</p>
-        <h2 className="mt-3 max-w-3xl text-2xl font-semibold tracking-normal text-neutral-950 sm:text-4xl">
-          输入题目或上传图片，答案和图形都会留在同一条学习线索里
+        <p className="text-sm font-semibold text-emerald-700">新的学习回合</p>
+        <h2 className="mt-3 max-w-3xl text-2xl font-semibold tracking-normal text-neutral-950 sm:text-3xl">
+          直接提问，图片题面、推导和可视化会保存在同一段对话里
         </h2>
-        <p className="mt-3 max-w-2xl text-base leading-7 text-neutral-600">
-          图片会先被识别成可编辑文本，你确认后再发送；生成的图形会随会话保存。
-        </p>
       </div>
       <div className="grid gap-3 md:grid-cols-3">
         {examples.map((example) => (
           <button
-            className="min-h-28 rounded-lg border border-neutral-200 bg-white p-4 text-left shadow-sm transition hover:border-emerald-300 hover:shadow-md"
+            className="min-h-24 rounded-lg border border-neutral-200 bg-white p-4 text-left shadow-sm transition hover:border-emerald-300 hover:shadow-md"
             key={example.label}
             onClick={() => onPickExample(example)}
             type="button"
@@ -773,13 +790,13 @@ function MessageBubble({
   return (
     <article className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
       <div
-        className={`max-w-[92%] rounded-lg px-4 py-3 shadow-sm sm:max-w-[78%] ${
+        className={`max-w-[94%] rounded-lg px-4 py-3 shadow-sm sm:max-w-[82%] ${
           isUser
             ? "bg-neutral-950 text-white"
             : "border border-neutral-200 bg-white text-neutral-900"
         }`}
       >
-        <p className="text-xs font-semibold uppercase tracking-[0.12em] opacity-70">
+        <p className="text-xs font-semibold uppercase opacity-70">
           {isUser ? "You" : "Math Agent"}
         </p>
         <div className="mt-2">
@@ -795,7 +812,7 @@ function MessageBubble({
         ) : null}
         {!isUser && message.plotSuggestion && !message.plot ? (
           <button
-            className="mt-3 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-900 transition hover:bg-emerald-100 disabled:opacity-60"
+            className="mt-3 inline-flex h-9 items-center rounded-md border border-emerald-200 bg-emerald-50 px-3 text-sm font-semibold text-emerald-900 transition hover:bg-emerald-100 disabled:opacity-60"
             disabled={Boolean(message.plotLoading) || message.status === "streaming"}
             onClick={() => onGeneratePlot(message.plotSuggestion as PlotPreviewRequest)}
             type="button"
@@ -813,7 +830,11 @@ function MessageBubble({
           </p>
         ) : null}
         {message.plot ? (
-          <PlotViewer className="mt-4" onExpand={() => onExpandPlot(message.plot as PlotPreviewResponse)} plot={message.plot} />
+          <PlotViewer
+            className="mt-4"
+            onExpand={() => onExpandPlot(message.plot as PlotPreviewResponse)}
+            plot={message.plot}
+          />
         ) : null}
       </div>
     </article>
@@ -852,11 +873,11 @@ function Composer({
       className="shrink-0 border-t border-neutral-200 bg-white/95 px-4 py-3 shadow-[0_-10px_30px_rgba(15,23,42,0.05)] backdrop-blur sm:px-6"
       onSubmit={onSubmit}
     >
-      <div className="mx-auto max-w-6xl space-y-3">
+      <div className="mx-auto max-w-5xl space-y-2.5">
         <ModeSelector answerMode={answerMode} disabled={disabled} onChange={onAnswerModeChange} />
         <AttachmentStatus attachment={attachment} onClear={onClearAttachment} />
         <div className="flex gap-2">
-          <div className="flex min-w-0 flex-1 items-end gap-2 rounded-lg border border-neutral-300 bg-white px-3 py-2 focus-within:border-emerald-600 focus-within:ring-2 focus-within:ring-emerald-100">
+          <div className="flex min-w-0 flex-1 items-end gap-2 rounded-lg border border-neutral-300 bg-white px-2.5 py-2 focus-within:border-emerald-600 focus-within:ring-2 focus-within:ring-emerald-100">
             <button
               aria-label="上传图片"
               className="mb-1 h-9 w-9 shrink-0 rounded-md border border-neutral-200 text-lg font-semibold text-neutral-600 transition hover:border-emerald-300 hover:text-emerald-700"
@@ -876,7 +897,7 @@ function Composer({
               type="file"
             />
             <textarea
-              className="max-h-40 min-h-16 flex-1 resize-none border-0 bg-transparent px-1 py-2 text-base leading-6 text-neutral-950 outline-none placeholder:text-neutral-400 disabled:text-neutral-400"
+              className="max-h-36 min-h-14 flex-1 resize-none border-0 bg-transparent px-1 py-2 text-base leading-6 text-neutral-950 outline-none placeholder:text-neutral-400 disabled:text-neutral-400"
               disabled={disabled}
               onChange={(event) => onInputChange(event.target.value)}
               placeholder="输入数学分析问题、证明思路或函数表达式"
@@ -916,23 +937,22 @@ function ModeSelector({
   onChange: (mode: AnswerMode) => void;
 }) {
   return (
-    <div className="grid grid-cols-3 gap-2">
+    <div className="inline-grid grid-cols-3 rounded-lg border border-neutral-200 bg-neutral-100 p-1">
       {answerModes.map((mode) => {
         const active = mode.value === answerMode;
         return (
           <button
-            className={`min-h-11 rounded-md border px-2 py-2 text-center transition disabled:cursor-not-allowed sm:px-3 sm:text-left ${
+            className={`h-9 rounded-md px-3 text-center text-sm transition disabled:cursor-not-allowed ${
               active
-                ? "border-emerald-700 bg-emerald-50 text-emerald-950"
-                : "border-neutral-200 bg-white text-neutral-700 hover:border-neutral-300"
+                ? "bg-white font-semibold text-neutral-950 shadow-sm"
+                : "text-neutral-600 hover:text-neutral-950"
             }`}
             disabled={disabled}
             key={mode.value}
             onClick={() => onChange(mode.value)}
             type="button"
           >
-            <span className="block text-sm font-semibold">{mode.label}</span>
-            <span className="hidden text-xs text-neutral-500 sm:block">{mode.description}</span>
+            {mode.label}
           </button>
         );
       })}
@@ -1021,13 +1041,50 @@ function buildPlotLookup(
     message_id: string | null;
     payload: Record<string, unknown>;
     created_at: string;
-  }>
+  }>,
+  assistantMessageIds: string[]
 ): Map<string, PlotPreviewResponse> {
   const lookup = new Map<string, PlotPreviewResponse>();
+  const unlinkedPlots: PlotPreviewResponse[] = [];
   for (const artifact of [...artifacts].sort((a, b) => a.created_at.localeCompare(b.created_at))) {
     const plot = artifact.payload.plot;
     if (artifact.message_id && isPlotPreviewResponse(plot)) {
       lookup.set(artifact.message_id, plot);
+    } else if (isPlotPreviewResponse(plot)) {
+      unlinkedPlots.push(plot);
+    }
+  }
+  for (const plot of unlinkedPlots) {
+    const targetId = assistantMessageIds.find((id) => !lookup.has(id));
+    if (targetId) {
+      lookup.set(targetId, plot);
+    }
+  }
+  return lookup;
+}
+
+function buildPlotSuggestionLookup(
+  artifacts: Array<{
+    message_id: string | null;
+    payload: Record<string, unknown>;
+    created_at: string;
+  }>,
+  assistantMessageIds: string[]
+): Map<string, PlotPreviewRequest> {
+  const lookup = new Map<string, PlotPreviewRequest>();
+  const unlinkedSuggestions: PlotPreviewRequest[] = [];
+  for (const artifact of [...artifacts].sort((a, b) => a.created_at.localeCompare(b.created_at))) {
+    const suggestion = artifact.payload.plot_suggestion;
+    if (artifact.message_id && isPlotPreviewRequest(suggestion)) {
+      lookup.set(artifact.message_id, suggestion);
+    } else if (isPlotPreviewRequest(suggestion)) {
+      unlinkedSuggestions.push(suggestion);
+    }
+  }
+  for (const suggestion of unlinkedSuggestions) {
+    const targetId = assistantMessageIds.find((id) => !lookup.has(id));
+    if (targetId) {
+      lookup.set(targetId, suggestion);
     }
   }
   return lookup;
@@ -1041,6 +1098,37 @@ function isPlotPreviewResponse(value: unknown): value is PlotPreviewResponse {
     "renderer" in value &&
     "spec" in value &&
     "explanation" in value
+  );
+}
+
+function isPlotPreviewRequest(value: unknown): value is PlotPreviewRequest {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "plot_type" in value &&
+    "expression" in value &&
+    "variables" in value &&
+    "ranges" in value
+  );
+}
+
+function latestQuestionType(messages: ChatMessage[]): QuestionType {
+  const latest = [...messages]
+    .reverse()
+    .find((message) => typeof message.questionType === "string")?.questionType;
+  return isQuestionType(latest) ? latest : "unknown";
+}
+
+function isQuestionType(value: unknown): value is QuestionType {
+  return (
+    value === "conceptual" ||
+    value === "computational" ||
+    value === "proof" ||
+    value === "visualization" ||
+    value === "mixed" ||
+    value === "ocr_derived" ||
+    value === "off_topic" ||
+    value === "unknown"
   );
 }
 

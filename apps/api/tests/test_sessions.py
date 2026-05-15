@@ -10,6 +10,7 @@ from math_agent_api.providers.llm import LLMProvider
 from math_agent_api.schemas.chat import ChatStreamRequest
 from math_agent_api.schemas.common import QuestionType
 from math_agent_api.services.chat_service import stream_chat_with_provider
+from math_agent_api.services.session_service import append_artifact, append_message, ensure_session
 
 
 class ShortProvider:
@@ -77,12 +78,89 @@ async def test_chat_stream_persists_session_messages(isolated_database) -> None:
     assert payload["messages"][1]["content"] == "持久化回答"
 
 
+@pytest.mark.asyncio
+async def test_chat_stream_persists_plot_suggestion_artifact(isolated_database) -> None:
+    request = ChatStreamRequest(message="画一下 z = sin(x*y) 的三维曲面", answer_mode="direct")
+
+    with isolated_database.SessionLocal() as db:
+        [
+            event
+            async for event in stream_chat_with_provider(
+                request=request,
+                session_id="session-visual",
+                question_type=QuestionType.VISUALIZATION,
+                provider=ShortProvider(),
+                db=db,
+            )
+        ]
+
+    client = TestClient(app)
+    response = client.get("/sessions/session-visual")
+    payload = response.json()
+    assistant_message = next(message for message in payload["messages"] if message["role"] == "assistant")
+    artifacts = payload["artifacts"]
+
+    assert response.status_code == 200
+    assert any(
+        artifact["artifact_type"] == "chat_metadata"
+        and artifact["message_id"] == assistant_message["id"]
+        and artifact["payload"]["planner"]["needs_plot"] is True
+        for artifact in artifacts
+    )
+    assert any(
+        artifact["artifact_type"] == "plot_suggestion"
+        and artifact["message_id"] == assistant_message["id"]
+        and artifact["payload"]["plot_suggestion"]["plot_type"] == "surface3d"
+        for artifact in artifacts
+    )
+
+
 def test_unknown_session_returns_404(isolated_database) -> None:
     client = TestClient(app)
 
     response = client.get("/sessions/missing")
 
     assert response.status_code == 404
+
+
+def test_session_detail_returns_all_messages_and_ordered_artifacts(isolated_database) -> None:
+    with isolated_database.SessionLocal() as db:
+        ensure_session(db, "session-long", default_answer_mode="guided")
+        for index in range(60):
+            append_message(
+                db,
+                session_id="session-long",
+                role="user" if index % 2 == 0 else "assistant",
+                content=f"message {index:02d}",
+                answer_mode="guided",
+            )
+        append_artifact(
+            db,
+            session_id="session-long",
+            artifact_type="plot_suggestion",
+            payload={"plot_suggestion": {"expression": "sin(x)"}},
+            message_id=None,
+        )
+        append_artifact(
+            db,
+            session_id="session-long",
+            artifact_type="plot_preview",
+            payload={"plot": {"plot_type": "function2d"}},
+            message_id=None,
+        )
+
+    client = TestClient(app)
+    response = client.get("/sessions/session-long")
+    payload = response.json()
+
+    assert response.status_code == 200
+    assert len(payload["messages"]) == 60
+    assert payload["messages"][0]["content"] == "message 00"
+    assert payload["messages"][-1]["content"] == "message 59"
+    assert [artifact["artifact_type"] for artifact in payload["artifacts"]] == [
+        "plot_suggestion",
+        "plot_preview",
+    ]
 
 
 @pytest.mark.asyncio
@@ -116,8 +194,14 @@ async def test_delete_session_removes_session_messages_and_artifacts(isolated_da
 
     detail_response = client.get("/sessions/session-delete")
     assert detail_response.status_code == 200
-    assert len(detail_response.json()["messages"]) == 2
-    assert len(detail_response.json()["artifacts"]) == 1
+    payload = detail_response.json()
+    assert len(payload["messages"]) == 2
+    assert len(payload["artifacts"]) == 3
+    assert {artifact["artifact_type"] for artifact in payload["artifacts"]} == {
+        "chat_metadata",
+        "plot_suggestion",
+        "plot_preview",
+    }
 
     delete_response = client.delete("/sessions/session-delete")
     assert delete_response.status_code == 204

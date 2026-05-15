@@ -4,7 +4,7 @@ from collections.abc import Sequence
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from math_agent_api.db.models import ArtifactRecord, MessageRecord, SessionRecord
+from math_agent_api.db.models import ArtifactRecord, MessageRecord, SessionRecord, utc_now
 
 
 class SessionRepository:
@@ -74,16 +74,26 @@ class SessionRepository:
         session = self.get_session(session_id)
         if session:
             session.title = session.title or _derive_title(content)
+            session.updated_at = utc_now()
         self.db.commit()
         self.db.refresh(record)
         return record
 
-    def list_messages(self, session_id: str, limit: int = 50) -> Sequence[MessageRecord]:
+    def list_messages(self, session_id: str, limit: int | None = None) -> Sequence[MessageRecord]:
         statement = (
             select(MessageRecord)
             .where(MessageRecord.session_id == session_id)
             .order_by(MessageRecord.created_at.asc())
-            .limit(limit)
+        )
+        if limit is not None:
+            statement = statement.limit(limit)
+        return self.db.scalars(statement).all()
+
+    def list_artifacts(self, session_id: str) -> Sequence[ArtifactRecord]:
+        statement = (
+            select(ArtifactRecord)
+            .where(ArtifactRecord.session_id == session_id)
+            .order_by(ArtifactRecord.created_at.asc(), ArtifactRecord.id.asc())
         )
         return self.db.scalars(statement).all()
 
@@ -101,6 +111,9 @@ class SessionRepository:
             payload_json=json.dumps(payload, ensure_ascii=False),
         )
         self.db.add(record)
+        session = self.get_session(session_id)
+        if session:
+            session.updated_at = utc_now()
         self.db.commit()
         self.db.refresh(record)
         return record

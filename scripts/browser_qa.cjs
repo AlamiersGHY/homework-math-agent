@@ -67,7 +67,11 @@ async function assertViewportFit(page, label) {
 }
 
 async function waitForText(page, regex, label) {
-  await page.locator("body").filter({ hasText: regex }).waitFor({ timeout: 30000 });
+  await page.waitForFunction(
+    (source) => new RegExp(source).test(document.body.innerText),
+    regex.source,
+    { timeout: 30000 }
+  );
   const text = await page.locator("body").innerText();
   assertOk(regex.test(text), label);
 }
@@ -95,6 +99,14 @@ async function runDesktopFlow(browser, baseUrl, screenshotDir) {
 
   await page.getByRole("button", { name: /\u751f\u6210\u53ef\u89c6\u5316\u56fe\u5f62|\u751f\u6210\u56fe\u5f62/ }).first().click();
   await page.locator(".js-plotly-plot").waitFor({ timeout: 30000 });
+  const plotDetail = await page.evaluate(async (id) => {
+    const response = await fetch(`http://127.0.0.1:8011/sessions/${id}`);
+    return response.json();
+  }, sessionId);
+  const assistantMessage = plotDetail.messages.find((message) => message.role === "assistant");
+  const plotArtifact = plotDetail.artifacts.find((artifact) => artifact.artifact_type === "plot_preview");
+  assertOk(assistantMessage, "assistant message was not persisted");
+  assertOk(plotArtifact && plotArtifact.message_id === assistantMessage.id, "plot artifact was not linked to assistant message id");
   const plotBox = await page.locator(".js-plotly-plot").boundingBox();
   assertOk(plotBox && plotBox.width > 400 && plotBox.height > 250, "desktop plot rendered too small");
   await assertViewportFit(page, "desktop plot");
@@ -119,6 +131,40 @@ async function runDesktopFlow(browser, baseUrl, screenshotDir) {
   await assertViewportFit(page, "desktop history plot");
   await page.screenshot({ path: path.join(screenshotDir, "desktop-history-plot.jpg"), type: "jpeg", quality: 84 });
 
+  await page.getByRole("button", { name: /\u65b0\u5efa/ }).first().click();
+  await page.locator("article").first().waitFor({ state: "detached", timeout: 15000 }).catch(() => undefined);
+  await page.locator("textarea").first().fill("画一下 y = sin(x) 的图像");
+  await page.getByRole("button", { name: /^\u53d1\u9001$/ }).click();
+  await waitForText(page, /sin\(x\)|\u9898\u76ee\u662f|\u53ef\u89c6\u5316/, "desktop suggestion-only answer did not render");
+  await page.locator("article").filter({ hasText: /\u6b63\u5728\u751f\u6210\u56de\u7b54/ }).waitFor({ state: "detached", timeout: 30000 }).catch(() => undefined);
+  const suggestionOnlySessions = await page.evaluate(async () => {
+    const response = await fetch("http://127.0.0.1:8011/sessions");
+    return response.json();
+  });
+  const suggestionSessionId = suggestionOnlySessions[0].id;
+  await page.reload({ waitUntil: "networkidle" });
+  await page.getByText("Math Agent").waitFor({ timeout: 15000 });
+  const suggestionTitle = suggestionOnlySessions[0].title;
+  await page.getByRole("button", { name: new RegExp(suggestionTitle.slice(0, 18).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")) }).first().click();
+  await page.getByRole("button", { name: /\u751f\u6210\u53ef\u89c6\u5316\u56fe\u5f62|\u751f\u6210\u56fe\u5f62/ }).first().waitFor({ timeout: 15000 });
+  assertOk(
+    (await page.locator(".js-plotly-plot").count()) === 0,
+    "suggestion-only history unexpectedly restored a generated plot"
+  );
+  await page.getByRole("button", { name: /\u751f\u6210\u53ef\u89c6\u5316\u56fe\u5f62|\u751f\u6210\u56fe\u5f62/ }).first().click();
+  await page.locator(".js-plotly-plot").waitFor({ timeout: 30000 });
+  const suggestionDetail = await page.evaluate(async (id) => {
+    const response = await fetch(`http://127.0.0.1:8011/sessions/${id}`);
+    return response.json();
+  }, suggestionSessionId);
+  const suggestionAssistant = suggestionDetail.messages.find((message) => message.role === "assistant");
+  const suggestionPlot = suggestionDetail.artifacts.find((artifact) => artifact.artifact_type === "plot_preview");
+  assertOk(suggestionPlot && suggestionAssistant && suggestionPlot.message_id === suggestionAssistant.id, "restored suggestion did not persist plot against assistant message");
+  await assertViewportFit(page, "desktop history suggestion");
+
+  await page.getByRole("button", { name: /\u65b0\u5efa/ }).first().click();
+  await page.locator("article").first().waitFor({ state: "detached", timeout: 15000 }).catch(() => undefined);
+
   const imagePath = path.join(screenshotDir, "qa-upload.png");
   fs.writeFileSync(
     imagePath,
@@ -129,8 +175,11 @@ async function runDesktopFlow(browser, baseUrl, screenshotDir) {
   );
   const messageCountBeforeOcrSend = await page.locator("article").count();
   await page.locator('input[type="file"]').setInputFiles(imagePath);
-  await waitForText(page, /\u5df2\u8bc6\u522b\u4e3a\u53ef\u7f16\u8f91\u6587\u672c|\u6c42/, "desktop OCR result did not appear");
   const ocrTextarea = page.locator("textarea").first();
+  await page.waitForFunction(() => {
+    const textarea = document.querySelector("textarea");
+    return Boolean(textarea && textarea.value.includes("\\lim"));
+  }, { timeout: 30000 });
   assertOk((await page.locator("article").count()) === messageCountBeforeOcrSend, "OCR auto-submitted before user confirmation");
   assertOk((await ocrTextarea.inputValue()).includes("\\lim"), "OCR text was not copied into composer");
   await ocrTextarea.fill(`${String.fromCharCode(27714)} $\\\\lim_{x\\\\to 0}\\\\frac{\\\\sin x}{x}$`);
@@ -148,13 +197,18 @@ async function runDesktopFlow(browser, baseUrl, screenshotDir) {
   await assertViewportFit(page, "desktop OCR chat");
   await page.screenshot({ path: path.join(screenshotDir, "desktop-ocr-chat.jpg"), type: "jpeg", quality: 84 });
 
+  const sessionsBeforeDelete = await page.evaluate(async () => {
+    const response = await fetch("http://127.0.0.1:8011/sessions");
+    return response.json();
+  });
+  const activeDeleteId = sessionsBeforeDelete[0].id;
   const deleteResponsePromise = page.waitForResponse(
-    (response) => response.url().includes(`/sessions/${sessionId}`) && response.request().method() === "DELETE"
+    (response) => response.url().includes(`/sessions/${activeDeleteId}`) && response.request().method() === "DELETE"
   );
   await page.getByLabel(/\u5220\u9664\u4f1a\u8bdd/).first().click();
   const deleteResponse = await deleteResponsePromise;
   assertOk(deleteResponse.status() === 204, "session delete did not return 204");
-  await page.getByText("\u5f00\u59cb\u4e00\u4e2a\u5b66\u4e60\u56de\u5408").waitFor({ timeout: 15000 });
+  await page.getByText("\u65b0\u7684\u5b66\u4e60\u56de\u5408").waitFor({ timeout: 15000 });
   assertOk((await page.locator("article").count()) === 0, "deleted active session did not clear messages");
   await assertViewportFit(page, "desktop after delete");
 
