@@ -52,14 +52,16 @@ def test_visualization_question_produces_plot_suggestion() -> None:
     assert plan.plot_suggestion.expression == "sin(x*y)"
 
 
-def test_complex_implicit_surface_stays_out_of_supported_plot_scope() -> None:
+def test_supported_implicit_surface_produces_implicit3d_suggestion() -> None:
     plan = plan_agent_turn(
         ChatStreamRequest(message="画出 x^4 + y^4 + z^4 = 1 的精确三维隐式曲面", answer_mode="direct")
     )
 
     assert plan.question_type == QuestionType.VISUALIZATION
-    assert plan.needs_plot is False
-    assert plan.plot_suggestion is None
+    assert plan.needs_plot is True
+    assert plan.plot_type == PlotType.IMPLICIT3D
+    assert plan.plot_suggestion is not None
+    assert plan.plot_suggestion.expression == "x^4 + y^4 + z^4 = 1"
 
 
 def test_broad_request_asks_for_clarification_and_records_weak_point() -> None:

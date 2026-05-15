@@ -80,8 +80,6 @@ def classify_question(message: str) -> QuestionType:
 def should_visualize(question_type: QuestionType, message: str | None = None) -> bool:
     if question_type != QuestionType.VISUALIZATION:
         return False
-    if message and _is_complex_implicit_surface(message):
-        return False
     return True
 
 
@@ -96,6 +94,16 @@ def create_plot_suggestion(message: str, question_type: QuestionType) -> PlotSug
             expression=_extract_region_expression(message),
             variables=["x", "y"],
             ranges={"x": (0, 1), "y": (0, 1)},
+            source="agent",
+        )
+
+    implicit_equation = _extract_implicit3d_equation(message)
+    if implicit_equation is not None:
+        return PlotSuggestion(
+            plot_type=PlotType.IMPLICIT3D,
+            expression=implicit_equation,
+            variables=["x", "y", "z"],
+            ranges={"x": (-1.5, 1.5), "y": (-1.5, 1.5), "z": (-1.5, 1.5)},
             source="agent",
         )
 
@@ -198,12 +206,31 @@ def _reason(
     return f"The request is handled as a {question_type.value} math-learning turn without extra tools."
 
 
-def _is_complex_implicit_surface(message: str) -> bool:
+def _extract_implicit3d_equation(message: str) -> str | None:
     normalized = message.replace(" ", "").lower()
     if "=" not in normalized:
-        return False
+        return None
+    if normalized.startswith("z="):
+        return None
+    if not all(variable in normalized for variable in ["x", "y", "z"]):
+        return None
     left_side = normalized.split("=", 1)[0]
-    return "x" in left_side and "y" in left_side and "z" in left_side
+    if not all(variable in left_side for variable in ["x", "y", "z"]):
+        return None
+    compact = message.replace("＝", "=")
+    start_candidates = [
+        index for index in (compact.find("x"), compact.find("y"), compact.find("z")) if index >= 0
+    ]
+    if not start_candidates:
+        return None
+    equation = compact[min(start_candidates):].strip()
+    for separator in ["，", ","]:
+        if separator in equation:
+            equation = equation.split(separator, 1)[0].strip()
+    for marker in [" 的", " please", " with"]:
+        if marker in equation:
+            equation = equation.split(marker, 1)[0].strip()
+    return equation if "=" in equation else None
 
 
 def _looks_like_region2d(message: str) -> bool:

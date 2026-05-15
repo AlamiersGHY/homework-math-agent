@@ -35,6 +35,7 @@
 - `function2d`：二维函数图。
 - `surface3d`：三维曲面图。
 - `region2d`：二维区域图。
+- `implicit3d`：受支持的三维隐式曲面预览。
 
 ## 错误格式
 
@@ -295,6 +296,7 @@ Phase 1 planner metadata 形态：
 - 第一版优先返回 Plotly 风格 spec。
 - `function2d` 至少需要一个变量和一个范围。
 - `surface3d` 至少需要两个变量和两个范围。
+- `implicit3d` 至少需要 `x`、`y`、`z` 三个变量、三个有限范围，以及单个等式表达式，例如 `x^4 + y^4 + z^4 = 1`；后端返回 Plotly `isosurface` spec。
 - 当 `session_id` 对应本地会话存在时，后端会把 plot preview 作为 `plot_preview` artifact 保存到该会话；`message_id` 用于把图形关联到对应 assistant message。
 - 当请求包含 `session_id` 但该会话不存在时，接口应返回统一错误 JSON，例如 `404` / `session_not_found`，不能静默返回一个看似已保存的结果。
 - 前端恢复历史会话时应优先使用 session detail 中的 `plot_preview` artifact，而不是重新推导数学表达式。

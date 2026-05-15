@@ -89,24 +89,25 @@
   },
   {
     "id": "visual-005",
-    "title": "Complex implicit surface is outside MVP plot scope",
+    "title": "Supported implicit 3D surface can trigger implicit3d",
     "input": {
       "message": "画出 x^4 + y^4 + z^4 = 1 的精确三维隐式曲面",
       "expression": "x^4 + y^4 + z^4 = 1"
     },
     "expected": {
-      "should_visualize": false,
-      "plot_type": null,
-      "out_of_scope_reason": "complex implicit surface"
+      "should_visualize": true,
+      "plot_type": "implicit3d",
+      "variables": ["x", "y", "z"],
+      "renderer": "plotly"
     },
     "must": [
-      "explain that this exact implicit surface is outside MVP plotting scope",
-      "offer a simpler alternative if useful"
+      "preserve the original implicit equation",
+      "produce a Plotly isosurface preview"
     ],
     "must_not": [
       "promise precise professional 3D modeling",
-      "pretend surface3d z=f(x,y) can directly represent it"
+      "fallback to sin(x*y) or surface3d"
     ],
-    "notes": "MVP visualization is intentionally bounded."
+    "notes": "This is the minimum supported implicit3d surface case."
   }
 ]

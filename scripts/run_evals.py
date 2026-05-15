@@ -144,6 +144,23 @@ def check_visual_case(case: dict[str, Any]) -> list[EvalFailure]:
     if not plot_suggestion:
         return failures
 
+    if "variables" in expected and plot_suggestion.get("variables") != expected["variables"]:
+        failures.append(
+            EvalFailure(
+                case["id"],
+                f"expected variables={expected['variables']}, got {plot_suggestion.get('variables')}",
+            )
+        )
+
+    expected_expression = case.get("input", {}).get("expression")
+    if expected_expression and plot_suggestion.get("expression") != expected_expression:
+        failures.append(
+            EvalFailure(
+                case["id"],
+                f"expected expression={expected_expression}, got {plot_suggestion.get('expression')}",
+            )
+        )
+
     if expected.get("renderer") == "plotly":
         try:
             preview = create_plot_preview(

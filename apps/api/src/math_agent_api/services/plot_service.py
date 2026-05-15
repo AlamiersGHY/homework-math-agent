@@ -38,6 +38,8 @@ def create_plot_preview(request: PlotPreviewRequest) -> PlotPreviewResponse:
         return _create_surface3d(request)
     if request.plot_type == PlotType.REGION2D:
         return _create_region2d(request)
+    if request.plot_type == PlotType.IMPLICIT3D:
+        return _create_implicit3d(request)
     raise PlotValidationError("This plot type is not implemented in the MVP preview yet.")
 
 
@@ -192,6 +194,86 @@ def _is_supported_triangular_region(expression: str, x_name: str, y_name: str) -
     lower_y = f"0<={y_name}<={x_name}" in compact
     bounded_x = f"0<={x_name}<=1" in compact
     return lower_y and bounded_x
+
+
+def _create_implicit3d(request: PlotPreviewRequest) -> PlotPreviewResponse:
+    if len(request.variables) != 3:
+        raise PlotValidationError("implicit3d requires exactly three variables.")
+    x_name, y_name, z_name = request.variables
+    if set(request.variables) != {"x", "y", "z"}:
+        raise PlotValidationError("implicit3d supports only x, y, and z variables.")
+    x_start, x_end = _get_valid_range(request.ranges, x_name)
+    y_start, y_end = _get_valid_range(request.ranges, y_name)
+    z_start, z_end = _get_valid_range(request.ranges, z_name)
+    expression, level = _split_implicit_equation(request.expression)
+    evaluator = _compile_expression(expression, {x_name, y_name, z_name})
+    xs = _linspace(x_start, x_end, MAX_SAMPLES_3D_AXIS)
+    ys = _linspace(y_start, y_end, MAX_SAMPLES_3D_AXIS)
+    zs = _linspace(z_start, z_end, MAX_SAMPLES_3D_AXIS)
+    x_values: list[float] = []
+    y_values: list[float] = []
+    z_values: list[float] = []
+    scalar_values: list[float | None] = []
+    for z in zs:
+        for y in ys:
+            for x in xs:
+                x_values.append(x)
+                y_values.append(y)
+                z_values.append(z)
+                scalar_values.append(_safe_eval(evaluator, {x_name: x, y_name: y, z_name: z}))
+    spec = {
+        "data": [
+            {
+                "type": "isosurface",
+                "x": x_values,
+                "y": y_values,
+                "z": z_values,
+                "value": scalar_values,
+                "isomin": level,
+                "isomax": level,
+                "surface": {"count": 1},
+                "caps": {
+                    "x": {"show": False},
+                    "y": {"show": False},
+                    "z": {"show": False},
+                },
+                "colorscale": "Viridis",
+                "opacity": 0.72,
+                "name": request.expression,
+            }
+        ],
+        "layout": {
+            "title": {"text": request.expression},
+            "scene": {
+                "xaxis": {"title": x_name},
+                "yaxis": {"title": y_name},
+                "zaxis": {"title": z_name},
+                "aspectmode": "cube",
+                "camera": {"eye": {"x": 1.45, "y": 1.45, "z": 1.15}},
+            },
+            "margin": {"l": 0, "r": 0, "t": 48, "b": 0},
+        },
+        "config": {"responsive": True, "displaylogo": False},
+    }
+    return PlotPreviewResponse(
+        plot_type=PlotType.IMPLICIT3D,
+        spec=spec,
+        explanation=f"Implicit surface preview for ${request.expression}$ using a Plotly isosurface.",
+    )
+
+
+def _split_implicit_equation(expression: str) -> tuple[str, float]:
+    normalized = expression.replace("＝", "=").strip()
+    if normalized.count("=") != 1:
+        raise PlotValidationError("implicit3d expression must be a single equation.")
+    left, right = [part.strip() for part in normalized.split("=", 1)]
+    if not left or not right:
+        raise PlotValidationError("implicit3d expression must include both sides of the equation.")
+    level_evaluator = _compile_expression(right, set())
+    level = _safe_eval(level_evaluator, {})
+    if level is None:
+        raise PlotValidationError("implicit3d equation level must be a finite number.")
+    return left, level
 
 
 def _get_valid_range(ranges: dict[str, tuple[float, float]], variable: str) -> tuple[float, float]:

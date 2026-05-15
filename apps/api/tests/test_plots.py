@@ -68,6 +68,29 @@ def test_plot_preview_surface3d_returns_plotly_surface() -> None:
     assert len(payload["spec"]["data"][0]["z"][0]) == 35
 
 
+def test_plot_preview_implicit3d_returns_plotly_isosurface() -> None:
+    client = TestClient(app)
+
+    response = client.post(
+        "/plots/preview",
+        json={
+            "plot_type": "implicit3d",
+            "expression": "x^4 + y^4 + z^4 = 1",
+            "variables": ["x", "y", "z"],
+            "ranges": {"x": [-1.5, 1.5], "y": [-1.5, 1.5], "z": [-1.5, 1.5]},
+        },
+    )
+    payload = response.json()
+
+    assert response.status_code == 200
+    assert payload["plot_type"] == "implicit3d"
+    assert payload["renderer"] == "plotly"
+    assert payload["spec"]["data"][0]["type"] == "isosurface"
+    assert payload["spec"]["data"][0]["isomin"] == 1
+    assert payload["spec"]["data"][0]["isomax"] == 1
+    assert len(payload["spec"]["data"][0]["value"]) == 35 * 35 * 35
+
+
 def test_plot_preview_region2d_returns_plotly_region() -> None:
     client = TestClient(app)
 
@@ -132,6 +155,40 @@ def test_plot_preview_rejects_invalid_range() -> None:
             "expression": "x + y",
             "variables": ["x", "y"],
             "ranges": {"x": [2, 2], "y": [-1, 1]},
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "plot_validation_error"
+
+
+def test_plot_preview_implicit3d_rejects_invalid_variable() -> None:
+    client = TestClient(app)
+
+    response = client.post(
+        "/plots/preview",
+        json={
+            "plot_type": "implicit3d",
+            "expression": "x^2 + y^2 + w^2 = 1",
+            "variables": ["x", "y", "w"],
+            "ranges": {"x": [-1, 1], "y": [-1, 1], "w": [-1, 1]},
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "plot_validation_error"
+
+
+def test_plot_preview_implicit3d_rejects_unsafe_expression() -> None:
+    client = TestClient(app)
+
+    response = client.post(
+        "/plots/preview",
+        json={
+            "plot_type": "implicit3d",
+            "expression": "__import__('os').system('dir') + y + z = 1",
+            "variables": ["x", "y", "z"],
+            "ranges": {"x": [-1, 1], "y": [-1, 1], "z": [-1, 1]},
         },
     )
 

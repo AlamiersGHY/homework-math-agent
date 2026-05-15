@@ -115,6 +115,38 @@ async def test_chat_stream_persists_plot_suggestion_artifact(isolated_database) 
     )
 
 
+@pytest.mark.asyncio
+async def test_chat_stream_persists_implicit3d_plot_suggestion_artifact(isolated_database) -> None:
+    request = ChatStreamRequest(
+        message="画出 x^4 + y^4 + z^4 = 1 的精确三维隐式曲面",
+        answer_mode="direct",
+    )
+
+    with isolated_database.SessionLocal() as db:
+        [
+            event
+            async for event in stream_chat_with_provider(
+                request=request,
+                session_id="session-implicit",
+                question_type=QuestionType.VISUALIZATION,
+                provider=ShortProvider(),
+                db=db,
+            )
+        ]
+
+    client = TestClient(app)
+    response = client.get("/sessions/session-implicit")
+    artifacts = response.json()["artifacts"]
+
+    assert response.status_code == 200
+    assert any(
+        artifact["artifact_type"] == "plot_suggestion"
+        and artifact["payload"]["plot_suggestion"]["plot_type"] == "implicit3d"
+        and artifact["payload"]["plot_suggestion"]["expression"] == "x^4 + y^4 + z^4 = 1"
+        for artifact in artifacts
+    )
+
+
 def test_unknown_session_returns_404(isolated_database) -> None:
     client = TestClient(app)
 

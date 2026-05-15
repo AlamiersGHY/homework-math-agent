@@ -25,6 +25,7 @@ class PlotType(StrEnum):
     FUNCTION2D = "function2d"
     SURFACE3D = "surface3d"
     REGION2D = "region2d"
+    IMPLICIT3D = "implicit3d"
 
 
 class ErrorBody(BaseModel):

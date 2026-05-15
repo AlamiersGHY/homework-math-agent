@@ -162,7 +162,7 @@ def test_chat_stream_suggests_region_plot_for_simple_region_question() -> None:
     assert '"expression": "0<=x<=1, 0<=y<=x' in body
 
 
-def test_chat_stream_does_not_suggest_complex_implicit_surface() -> None:
+def test_chat_stream_suggests_implicit3d_for_supported_implicit_surface() -> None:
     client = TestClient(app)
 
     with client.stream(
@@ -174,8 +174,9 @@ def test_chat_stream_does_not_suggest_complex_implicit_surface() -> None:
 
     assert response.status_code == 200
     assert '"question_type": "visualization"' in body
-    assert '"should_visualize": false' in body
-    assert '"plot_suggestion": null' in body
+    assert '"should_visualize": true' in body
+    assert '"plot_type": "implicit3d"' in body
+    assert '"expression": "x^4 + y^4 + z^4 = 1"' in body
 
 
 def test_chat_stream_falls_back_to_mock_without_api_key(monkeypatch: pytest.MonkeyPatch) -> None:
