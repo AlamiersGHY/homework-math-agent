@@ -206,3 +206,14 @@
 - Added a compact chat-first materials strip in the frontend for PDF upload/list/delete and source cards under assistant answers.
 - Extended mock API smoke and browser QA to cover PDF upload, retrieval, citation display, citation history replay, material deletion, no raw debug leakage, and desktop/mobile viewport fit.
 - Verified `.\scripts\release-check.ps1` on 2026-05-15 18:10 +08: 47 backend tests passed, deterministic evals passed, frontend typecheck/build passed, mock API smoke passed, browser QA passed with screenshots under `.cache/qa/20260515-181039`, and dependency audit advisory remained tracked under TD-005.
+
+## Attachment UX And Automatic Plot Execution
+
+- Added a shared frontend API client that normalizes backend JSON errors, hides raw browser `Failed to fetch` text, and retries configured/local API base candidates for local demo runs.
+- Replaced visible OCR text prefill with chat-style multi-image attachment cards; OCR now runs after explicit send and sends hidden `confirmed_ocr_text` to the chat stream.
+- Added image attachment thumbnails in user messages and a preview/marking modal for composer image cards.
+- Executed planner-provided plot suggestions automatically after assistant message persistence, including persisted history restore for generated plot previews.
+- Added minimum `implicit3d` support for `x^4 + y^4 + z^4 = 1` using Plotly `isosurface`, with planner/test/eval coverage and no `sin` fallback.
+- Fixed planner classification for explicit `y = f(x)` graph requests so they use `function2d`, including English `Draw the graph of y = sin(x)`.
+- Extended browser QA to cover PDF connection failure retry, hidden OCR attachment flow, multi-image thumbnails, image preview modal, automatic plot generation, and implicit 3D history restore.
+- Verified `.\scripts\release-check.ps1` on 2026-05-15 22:31 +08: 52 backend tests passed, deterministic evals passed, frontend typecheck/build passed, mock API smoke passed, browser QA passed with screenshots under `.cache/qa/20260515-223152`, and dependency audit advisory remained tracked under TD-005.

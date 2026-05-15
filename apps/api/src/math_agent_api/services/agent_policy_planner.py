@@ -108,6 +108,15 @@ def create_plot_suggestion(message: str, question_type: QuestionType) -> PlotSug
         )
 
     expression = _extract_expression_after_equals(message)
+    if _looks_like_function2d(message, normalized):
+        return PlotSuggestion(
+            plot_type=PlotType.FUNCTION2D,
+            expression=expression or "sin(x)/x",
+            variables=["x"],
+            ranges={"x": (-6, 6)},
+            source="agent",
+        )
+
     if "z=" in normalized or ("x" in normalized and "y" in normalized):
         return PlotSuggestion(
             plot_type=PlotType.SURFACE3D,
@@ -150,7 +159,11 @@ def _is_off_topic(message: str, normalized: str) -> bool:
 
 
 def _is_visualization_request(message: str, normalized: str) -> bool:
-    return any(token in message for token in ["画", "图像", "曲面", "区域", "可视化"]) or "z=" in normalized
+    return (
+        any(token in message for token in ["画", "图像", "曲面", "区域", "可视化"])
+        or any(token in normalized for token in ["draw", "graph", "visualize", "plot", "surface"])
+        or "z=" in normalized
+    )
 
 
 def _needs_retrieval(message: str, question_type: QuestionType) -> bool:
@@ -239,6 +252,12 @@ def _looks_like_region2d(message: str) -> bool:
     return mentions_region and "x" in normalized and "y" in normalized and "<=" in normalized
 
 
+def _looks_like_function2d(message: str, normalized: str) -> bool:
+    if "z=" in normalized:
+        return False
+    return any(marker in normalized for marker in ["y=", "f(x)=", "graphof", "graphoff"])
+
+
 def _extract_region_expression(message: str) -> str:
     for marker in ["D:", "d:", "D：", "d："]:
         if marker in message:
@@ -252,6 +271,7 @@ def _extract_expression_after_equals(message: str) -> str | None:
             candidate = message.split(marker, 1)[1]
             candidate = candidate.replace("的三维曲面", "").replace("的图像", "")
             candidate = candidate.replace("三维曲面", "").replace("图像", "")
-            candidate = candidate.replace("，", " ").replace(",", " ").strip()
+            candidate = candidate.replace("graph", "").replace("plot", "")
+            candidate = candidate.replace("，", " ").replace(",", " ").strip(" .。")
             return candidate.split()[0] if candidate else None
     return None

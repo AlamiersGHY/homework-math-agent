@@ -10,7 +10,7 @@ export type QuestionType =
   | "off_topic"
   | "unknown";
 
-export type PlotType = "function2d" | "surface3d" | "region2d";
+export type PlotType = "function2d" | "surface3d" | "region2d" | "implicit3d";
 
 export type ChatRole = "user" | "assistant";
 
@@ -18,6 +18,7 @@ export type ChatMessage = {
   id: string;
   role: ChatRole;
   content: string;
+  attachments?: ChatMessageAttachment[];
   status?: "streaming" | "done" | "error";
   persisted?: boolean;
   answerMode?: AnswerMode | string | null;
@@ -29,6 +30,14 @@ export type ChatMessage = {
   plot?: PlotPreviewResponse | null;
   plotLoading?: boolean;
   plotError?: string | null;
+};
+
+export type ChatMessageAttachment = {
+  id: string;
+  kind: "image";
+  fileName: string;
+  previewUrl: string;
+  annotated?: boolean;
 };
 
 export type ChatStreamRequest = {

@@ -182,7 +182,7 @@ async function runDesktopFlow(browser, baseUrl, screenshotDir) {
   await page.getByRole("button", { name: /\u65b0\u5efa/ }).first().click();
   await page.locator("article").first().waitFor({ state: "detached", timeout: 15000 }).catch(() => undefined);
   await page.getByRole("button", { name: /\u76f4\u63a5\u89e3\u7b54/ }).click();
-  await page.locator("textarea").first().fill("Visualize the implicit 3D surface x^2 + y^2 - z^2 = 1.");
+  await page.locator("textarea").first().fill("画出 x^4 + y^4 + z^4 = 1 的精确三维隐式曲面");
   const automaticPlotRequestPromise = page.waitForRequest((request) => request.url().includes("/plots/preview"));
   await page.getByRole("button", { name: /^\u53d1\u9001$/ }).click();
   await waitForText(page, /\u6ce2\u5cf0|\u66f2\u9762/, "desktop chat answer did not render");
@@ -195,7 +195,11 @@ async function runDesktopFlow(browser, baseUrl, screenshotDir) {
 
   const automaticPlotRequest = await automaticPlotRequestPromise;
   const automaticPlotPayload = JSON.parse(automaticPlotRequest.postData() || "{}");
-  assertOk(automaticPlotPayload.plot_type === "surface3d", "implicit 3D question did not request a surface3d plot");
+  assertOk(automaticPlotPayload.plot_type === "implicit3d", "implicit 3D question did not request an implicit3d plot");
+  assertOk(
+    automaticPlotPayload.expression === "x^4 + y^4 + z^4 = 1",
+    "implicit 3D question did not preserve the original equation"
+  );
   assertOk(
     typeof automaticPlotPayload.expression === "string" && !/sin\s*\(/i.test(automaticPlotPayload.expression),
     "implicit 3D question used a sin fallback expression"
@@ -214,7 +218,7 @@ async function runDesktopFlow(browser, baseUrl, screenshotDir) {
   assertOk(assistantMessage, "assistant message was not persisted");
   assertOk(plotArtifact && plotArtifact.message_id === assistantMessage.id, "plot artifact was not linked to assistant message id");
   assertOk(
-    plotArtifact.payload?.plot?.plot_type === "surface3d" &&
+    plotArtifact.payload?.plot?.plot_type === "implicit3d" &&
       !/sin\s*\(/i.test(String(plotArtifact.payload?.plot?.expression ?? automaticPlotPayload.expression)),
     "persisted implicit 3D plot fell back to sin"
   );
@@ -236,7 +240,7 @@ async function runDesktopFlow(browser, baseUrl, screenshotDir) {
 
   await page.reload({ waitUntil: "networkidle" });
   await page.getByText("Math Agent").waitFor({ timeout: 15000 });
-  await page.getByRole("button", { name: /implicit 3D surface|x\^2 \+ y\^2/ }).first().click();
+  await page.getByRole("button", { name: /x\^4 \+ y\^4 \+ z\^4/ }).first().click();
   await page.locator(".js-plotly-plot").waitFor({ timeout: 30000 });
   assertOk((await page.getByRole("button", { name: /\u751f\u6210\u53ef\u89c6\u5316\u56fe\u5f62/ }).count()) === 0, "history restored only a plot suggestion");
   await assertViewportFit(page, "desktop history plot");
@@ -245,9 +249,14 @@ async function runDesktopFlow(browser, baseUrl, screenshotDir) {
   await page.getByRole("button", { name: /\u65b0\u5efa/ }).first().click();
   await page.locator("article").first().waitFor({ state: "detached", timeout: 15000 }).catch(() => undefined);
   await page.locator("textarea").first().fill("Draw the graph of y = sin(x).");
+  const functionPlotRequestPromise = page.waitForRequest((request) => request.url().includes("/plots/preview"));
   await page.getByRole("button", { name: /^\u53d1\u9001$/ }).click();
   await waitForText(page, /sin\(x\)|\u9898\u76ee\u662f|\u53ef\u89c6\u5316/, "desktop suggestion-only answer did not render");
   await page.locator("article").filter({ hasText: /\u6b63\u5728\u751f\u6210\u56de\u7b54/ }).waitFor({ state: "detached", timeout: 30000 }).catch(() => undefined);
+  const functionPlotRequest = await functionPlotRequestPromise;
+  const functionPlotPayload = JSON.parse(functionPlotRequest.postData() || "{}");
+  assertOk(functionPlotPayload.plot_type === "function2d", "function visualization did not auto-request function2d plot");
+  await page.locator(".js-plotly-plot").waitFor({ timeout: 30000 });
   const suggestionOnlySessions = await page.evaluate(async () => {
     const response = await fetch("http://127.0.0.1:8011/sessions");
     return response.json();
@@ -257,12 +266,6 @@ async function runDesktopFlow(browser, baseUrl, screenshotDir) {
   await page.getByText("Math Agent").waitFor({ timeout: 15000 });
   const suggestionTitle = suggestionOnlySessions[0].title;
   await page.getByRole("button", { name: new RegExp(suggestionTitle.slice(0, 18).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")) }).first().click();
-  await page.getByRole("button", { name: /\u751f\u6210\u53ef\u89c6\u5316\u56fe\u5f62|\u751f\u6210\u56fe\u5f62/ }).first().waitFor({ timeout: 15000 });
-  assertOk(
-    (await page.locator(".js-plotly-plot").count()) === 0,
-    "suggestion-only history unexpectedly restored a generated plot"
-  );
-  await page.getByRole("button", { name: /\u751f\u6210\u53ef\u89c6\u5316\u56fe\u5f62|\u751f\u6210\u56fe\u5f62/ }).first().click();
   await page.locator(".js-plotly-plot").waitFor({ timeout: 30000 });
   const suggestionDetail = await page.evaluate(async (id) => {
     const response = await fetch(`http://127.0.0.1:8011/sessions/${id}`);
@@ -318,7 +321,8 @@ async function runDesktopFlow(browser, baseUrl, screenshotDir) {
     "OCR-confirmed text was not sent through chat payload"
   );
   await waitForText(page, /\\lim|\u5939\u903c|\u7ed3\u8bba/, "desktop OCR-confirmed chat did not render");
-  assertOk((await page.getByText(/qa-attachment-a\.png|qa-attachment-b\.png/).count()) === 0, "image attachments did not clear after send");
+  assertOk((await page.getByText(/qa-attachment-a\.png|qa-attachment-b\.png/).count()) >= 2, "sent user message did not keep image attachment cards");
+  assertOk((await page.getByText("图片附件").count()) === 0, "composer image attachment tray did not clear after send");
   await page.unroute("**/ocr/recognize");
   await assertNoRawDebugText(page);
   await assertViewportFit(page, "desktop OCR chat");

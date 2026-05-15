@@ -1,4 +1,4 @@
-import { API_BASE_URL } from "./config";
+import { apiFetch, extractErrorMessage, readJson } from "./client";
 import type {
   ChatStreamEvent,
   ChatStreamRequest,
@@ -23,7 +23,7 @@ export async function streamChat(
   handlers: ChatStreamHandlers,
   signal?: AbortSignal
 ): Promise<void> {
-  const response = await fetch(`${API_BASE_URL}/chat/stream`, {
+  const response = await apiFetch("/chat/stream", {
     method: "POST",
     headers: {
       Accept: "text/event-stream",
@@ -34,7 +34,8 @@ export async function streamChat(
   });
 
   if (!response.ok) {
-    throw new Error(`Chat stream failed with ${response.status}`);
+    const payload = await readJson(response);
+    throw new Error(extractErrorMessage(payload, `Chat stream failed with ${response.status}`));
   }
 
   if (!response.body) {

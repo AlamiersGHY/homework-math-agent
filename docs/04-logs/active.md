@@ -6,7 +6,7 @@ Agentic RAG Prototype / Intelligent Course Assistant Prototype.
 
 ## Current Goal
 
-Continue from the verified PDF RAG and citation unit toward planner-driven automatic tool execution and lightweight preferences/memory. The current local prototype now supports PDF upload, page-aware chunk storage, deterministic retrieval, chat citation metadata, frontend source display, and history replay. The next coherent implementation unit should make more planner decisions execute automatically, especially supported plot previews and clarification-first responses, without turning the product into a manual tool workbench.
+Continue from the verified PDF RAG, citation, attachment UX, and automatic plot execution units toward clarification-first responses and lightweight preferences/memory. The current local prototype now supports PDF upload, page-aware chunk storage, deterministic retrieval, chat citation metadata, frontend source display, history replay, hidden-OCR image attachments, and automatic supported plot previews.
 
 ## Relevant Docs
 
@@ -140,7 +140,7 @@ Continue from the verified PDF RAG and citation unit toward planner-driven autom
 - The session rail now supports deleting local demo sessions; deletion removes the session with its messages and artifacts.
 - Chat SSE now returns local `user_message_id` and `assistant_message_id` so the frontend can replace temporary message IDs and persist plot artifacts against the correct assistant message.
 - Plot preview can persist `plot_preview` artifacts when called with a known `session_id`; session detail can restore generated Plotly specs without rederiving math in the frontend.
-- The frontend now treats image upload as an inline composer attachment: OCR text is copied into the normal input area for user editing and still requires an explicit send.
+- The frontend now treats image upload as chat-style multi-image attachments: thumbnails stay in the composer, OCR runs only after explicit send, recognized text is sent as hidden `confirmed_ocr_text`, and the textarea is not used as an OCR scratchpad.
 - Plot rendering now lives inside the relevant assistant message and includes a larger modal view for detailed inspection.
 - Browser QA coverage now checks fixed app-shell viewport fit, inline OCR, plot modal, plot history restore, and session deletion. Latest release validation passed on 2026-05-15 14:29 +08 with screenshots under `.cache/qa/20260515-142929`.
 - Agentic RAG Prototype direction has been accepted for the next stage through ADR-007.
@@ -163,10 +163,14 @@ Continue from the verified PDF RAG and citation unit toward planner-driven autom
 - Browser QA now covers PDF material upload, citation source display, citation history replay, no raw debug metadata leakage, plot history replay, inline OCR, session deletion, material deletion, and desktop/mobile viewport fit. Latest full release validation passed on 2026-05-15 18:10 +08 with screenshots under `.cache/qa/20260515-181039`.
 - Backend plot support now includes the minimum supported `implicit3d` path for equations such as `x^4 + y^4 + z^4 = 1`: planner emits `needs_plot=true` with `plot_type=implicit3d`, plot preview returns a Plotly `isosurface` spec, and tests/evals cover expression preservation plus unsafe variable/expression rejection.
 - Browser QA coverage has been extended for the current acceptance subtask: `/documents` connection failure must avoid raw `Failed to fetch` and expose a Chinese retry path; multi-image attachments must render thumbnail cards without pre-filling OCR text into the textarea; image cards must open a preview/drawing modal; OCR must run only after send and populate `confirmed_ocr_text`; implicit 3D surface prompts must auto-create a persisted Plotly preview without a manual generate click or `sin` fallback.
+- Frontend API calls now go through a shared API client that normalizes JSON errors, hides raw browser `Failed to fetch` messages, and tries configured/local API base candidates for local demo runs.
+- Planner-driven plot suggestions are now executed automatically by the frontend after the assistant message is persisted; generated `plot_preview` artifacts are linked to the assistant message and restore from session history.
+- The planner now treats explicit `y = f(x)` graph requests, including English `Draw the graph of y = sin(x)`, as `function2d` rather than incorrectly forcing them into `surface3d`.
+- Browser QA passed on 2026-05-15 22:30 +08 after the attachment/API/automatic-plot unit with screenshots under `.cache/qa/20260515-223007`.
+- `.\scripts\release-check.ps1` passed on 2026-05-15 22:31 +08: 52 backend tests, deterministic evals, frontend typecheck/build, mock API smoke, browser QA, and dependency audit advisory completed. Browser QA screenshots are under `.cache/qa/20260515-223152`.
 
 ## Next Tasks
 
-- Implement automatic tool execution polish: when planner emits a supported `plot_suggestion`, the backend/frontend should attach the plot preview with less manual user effort while preserving explicit error handling and artifact persistence.
 - Add clarification-first response behavior for planner `needs_clarification=true` so broad/off-topic/underspecified requests can return a focused first question instead of a generic answer.
 - Begin preferences + lightweight memory planning and implementation only after documenting the local schema/API boundary; keep it local-only and bounded.
 - Improve retrieval ranking/chunking after the v1 lexical baseline only if tests and ADR updates keep citation safety intact.
@@ -183,6 +187,7 @@ Continue from the verified PDF RAG and citation unit toward planner-driven autom
 - `.\scripts\release-check.ps1` passed on 2026-05-15 15:20 +08: backend pytest, deterministic evals, frontend typecheck/build, mock API smoke, browser QA, and dependency audit advisory completed.
 - `.\scripts\release-check.ps1` passed on 2026-05-15 17:39 +08 after the session-history/UI foundation unit: backend pytest, deterministic evals, frontend typecheck/build, mock API smoke, browser QA, and dependency audit advisory completed.
 - `.\scripts\release-check.ps1` passed on 2026-05-15 18:10 +08 after PDF RAG/citation v1: backend pytest, deterministic evals, frontend typecheck/build, mock API smoke, browser QA, and dependency audit advisory completed.
+- `.\scripts\release-check.ps1` passed on 2026-05-15 22:31 +08 after the PDF connection, image attachment UX, and automatic plot execution unit; dependency audit remains advisory under TD-005.
 
 ## Exit Checklist
 
@@ -190,7 +195,7 @@ Continue from the verified PDF RAG and citation unit toward planner-driven autom
 - API changes must stay aligned with `docs/01-architecture/api-contracts.md`.
 - Frontend chat work should use native `fetch` stream for `POST /chat/stream`.
 - Math rendering/UI tasks must be checked with at least one formula-heavy answer, not only the empty starter screen.
-- OCR must return editable text for user confirmation and must not auto-submit recognized text into chat.
+- OCR must not auto-submit recognized text into chat before explicit user send; current chat-style image attachments keep OCR text hidden from the textarea and pass it as `confirmed_ocr_text` only when sending.
 - Plot viewer must consume backend Plotly-style specs and must not rederive math in the UI component.
 - Plot artifacts must be generated by backend plot preview and restored from session detail when available.
 - Session deletion must remain local-only and must remove the session's messages/artifacts without introducing account semantics.

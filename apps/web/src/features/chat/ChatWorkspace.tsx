@@ -1,6 +1,13 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import {
+  type FormEvent,
+  type PointerEvent,
+  useEffect,
+  useMemo,
+  useRef,
+  useState
+} from "react";
 import { MathMarkdown } from "@/components/MathMarkdown";
 import { checkHealth, type HealthResponse } from "@/lib/api/health";
 import { deleteDocument, listDocuments, uploadDocument } from "@/lib/api/documents";
@@ -11,10 +18,10 @@ import { streamChat } from "@/lib/api/chatStream";
 import { PlotViewer } from "@/features/plots/PlotViewer";
 import type {
   AnswerMode,
+  ChatMessageAttachment,
   ChatMessage,
   DocumentSummary,
   MetadataEventData,
-  OCRRecognizeResponse,
   PlotPreviewRequest,
   PlotPreviewResponse,
   QuestionType,
@@ -76,17 +83,21 @@ type ChatMetadata = {
   plotSuggestion: PlotPreviewRequest | null;
 };
 
-type AttachmentState =
-  | { status: "idle" }
-  | { status: "recognizing"; fileName: string; previewUrl: string | null }
-  | {
-      status: "ready";
-      fileName: string;
-      previewUrl: string | null;
-      result: OCRRecognizeResponse;
-      recognizedText: string;
-    }
-  | { status: "error"; message: string; fileName?: string; previewUrl?: string | null };
+type ImageAttachment = {
+  id: string;
+  file: File;
+  fileName: string;
+  previewUrl: string;
+  annotatedBlob?: Blob;
+  annotatedPreviewUrl?: string;
+  ocrStatus: "idle" | "recognizing" | "ready" | "error";
+  recognizedText?: string;
+  error?: string;
+};
+
+type ImageEditorState = {
+  attachmentId: string;
+} | null;
 
 type PlotModalState = {
   plot: PlotPreviewResponse;
@@ -122,10 +133,11 @@ export function ChatWorkspace() {
     uploading: false,
     error: null
   });
-  const [attachment, setAttachment] = useState<AttachmentState>({ status: "idle" });
+  const [imageAttachments, setImageAttachments] = useState<ImageAttachment[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [plotModal, setPlotModal] = useState<PlotModalState>(null);
+  const [imageEditor, setImageEditor] = useState<ImageEditorState>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const transcriptRef = useRef<HTMLDivElement | null>(null);
 
@@ -135,7 +147,7 @@ export function ChatWorkspace() {
   );
   const currentSessionTitle =
     sessions.find((session) => session.id === metadata.sessionId)?.title ?? "新学习会话";
-  const canSubmit = Boolean(input.trim()) && !isStreaming;
+  const canSubmit = (Boolean(input.trim()) || imageAttachments.length > 0) && !isStreaming;
 
   useEffect(() => {
     refreshHealth();
@@ -234,6 +246,7 @@ export function ChatWorkspace() {
             : []
       }));
 
+      revokeMessageAttachmentUrls(messages);
       setMessages(loadedMessages);
       setMetadata({
         ...initialMetadata,
@@ -246,7 +259,7 @@ export function ChatWorkspace() {
         questionType: latestQuestionType(loadedMessages)
       });
       setError(null);
-      setAttachment({ status: "idle" });
+      clearImageAttachments();
     } catch (caught: unknown) {
       setError(caught instanceof Error ? caught.message : "会话加载失败");
     }
@@ -310,11 +323,27 @@ export function ChatWorkspace() {
 
   async function sendMessage(messageText: string, modeOverride = answerMode) {
     const actualText = messageText.trim();
-    const cameFromOcr = attachment.status === "ready";
+    const attachmentsToSend = imageAttachments;
 
-    if (!actualText || isStreaming) {
+    if ((!actualText && attachmentsToSend.length === 0) || isStreaming) {
       return;
     }
+
+    setIsStreaming(true);
+    setError(null);
+
+    let attachmentOcrText = "";
+    try {
+      attachmentOcrText = await recognizePendingAttachments(attachmentsToSend);
+    } catch (caught: unknown) {
+      setError(caught instanceof Error ? caught.message : "图片识别失败，请稍后重试。");
+      setIsStreaming(false);
+      return;
+    }
+
+    const hasImageAttachments = attachmentsToSend.length > 0;
+    const visibleText = actualText || "请根据图片内容帮我分析这道题";
+    const userMessageAttachments = toMessageAttachments(attachmentsToSend);
 
     const previousTurns = messages
       .filter((item) => item.content.trim())
@@ -325,7 +354,8 @@ export function ChatWorkspace() {
     const userMessage: ChatMessage = {
       id: createId("user"),
       role: "user",
-      content: actualText,
+      content: visibleText,
+      attachments: userMessageAttachments,
       status: "done",
       persisted: false
     };
@@ -340,25 +370,27 @@ export function ChatWorkspace() {
 
     setMessages((current) => [...current, userMessage, assistantMessage]);
     setInput("");
-    setAttachment({ status: "idle" });
+    setImageAttachments([]);
+    setImageEditor(null);
     setError(null);
     setMetadata({
       ...initialMetadata,
       sessionId: metadata.sessionId,
       answerMode: modeOverride
     });
-    setIsStreaming(true);
 
     const controller = new AbortController();
     abortControllerRef.current = controller;
+    let pendingPlotSuggestion: PlotPreviewRequest | null = null;
+    let activeSessionId = metadata.sessionId;
 
     try {
       await streamChat(
         {
-          message: cameFromOcr ? "请帮我做这道 OCR 识别出来的题" : actualText,
+          message: hasImageAttachments && !actualText ? visibleText : actualText,
           answer_mode: modeOverride,
           session_id: metadata.sessionId,
-          confirmed_ocr_text: cameFromOcr ? actualText : null,
+          confirmed_ocr_text: attachmentOcrText || null,
           context: {
             previous_turns: previousTurns,
             style: "default"
@@ -366,6 +398,7 @@ export function ChatWorkspace() {
         },
         {
           onStart: (data: StartEventData) => {
+            activeSessionId = data.session_id;
             setMetadata((current) => ({
               ...current,
               sessionId: data.session_id,
@@ -383,6 +416,7 @@ export function ChatWorkspace() {
           },
           onMetadata: (data: MetadataEventData) => {
             const sources = data.citations ?? data.retrieved_sources ?? [];
+            pendingPlotSuggestion = data.plot_suggestion ?? pendingPlotSuggestion;
             setMetadata((current) => ({
               ...current,
               questionType: data.question_type,
@@ -422,6 +456,7 @@ export function ChatWorkspace() {
             );
           },
           onDone: (data) => {
+            const finalAssistantId = data.assistant_message_id ?? assistantId;
             setMetadata((current) => ({
               ...current,
               finishReason: data.finish_reason
@@ -431,13 +466,19 @@ export function ChatWorkspace() {
                 item.id === assistantId
                   ? {
                       ...item,
-                      id: data.assistant_message_id ?? item.id,
+                      id: finalAssistantId,
                       status: "done",
                       persisted: Boolean(data.assistant_message_id)
                     }
                   : item
               )
             );
+            if (pendingPlotSuggestion) {
+              void generatePlot(finalAssistantId, pendingPlotSuggestion, {
+                persistedMessageId: Boolean(data.assistant_message_id),
+                sessionId: activeSessionId
+              });
+            }
           }
         },
         controller.signal
@@ -475,37 +516,142 @@ export function ChatWorkspace() {
     await sendMessage(input);
   }
 
-  async function handleImagePick(file: File | null) {
-    if (!file) {
+  function handleImagePick(files: FileList | null) {
+    const pickedFiles = Array.from(files ?? []);
+    if (pickedFiles.length === 0) {
       return;
     }
 
-    const previewUrl = URL.createObjectURL(file);
-    setAttachment({ status: "recognizing", fileName: file.name, previewUrl });
+    const nextAttachments = pickedFiles.map((file) => ({
+      id: createId("image"),
+      file,
+      fileName: file.name,
+      previewUrl: URL.createObjectURL(file),
+      ocrStatus: "idle" as const
+    }));
+    setImageAttachments((current) => [...current, ...nextAttachments]);
     setError(null);
+  }
 
-    try {
-      const result = await recognizeOcrImage(file);
-      const recognizedText = result.recognized_text.trim();
-      setAttachment({
-        status: "ready",
-        fileName: file.name,
-        previewUrl,
-        result,
-        recognizedText
-      });
-      setInput((current) => (current.trim() ? `${current.trim()}\n\n${recognizedText}` : recognizedText));
-    } catch (caught: unknown) {
-      setAttachment({
-        status: "error",
-        fileName: file.name,
-        previewUrl,
-        message: caught instanceof Error ? caught.message : "OCR 识别失败"
-      });
+  async function recognizePendingAttachments(attachments: ImageAttachment[]): Promise<string> {
+    const recognized: string[] = [];
+    for (const attachment of attachments) {
+      if (attachment.ocrStatus === "ready" && attachment.recognizedText?.trim()) {
+        recognized.push(`[${attachment.fileName}]\n${attachment.recognizedText.trim()}`);
+        continue;
+      }
+
+      setImageAttachments((current) =>
+        current.map((item) =>
+          item.id === attachment.id
+            ? { ...item, ocrStatus: "recognizing", error: undefined }
+            : item
+        )
+      );
+
+      try {
+        const fileForOcr = attachment.annotatedBlob
+          ? new File([attachment.annotatedBlob], attachment.fileName, {
+              type: attachment.annotatedBlob.type || attachment.file.type
+            })
+          : attachment.file;
+        const result = await recognizeOcrImage(fileForOcr);
+        const recognizedText = result.recognized_text.trim();
+        setImageAttachments((current) =>
+          current.map((item) =>
+            item.id === attachment.id
+              ? {
+                  ...item,
+                  ocrStatus: "ready",
+                  recognizedText,
+                  error: undefined
+                }
+              : item
+          )
+        );
+        if (recognizedText) {
+          recognized.push(`[${attachment.fileName}]\n${recognizedText}`);
+        }
+      } catch (caught: unknown) {
+        const message = caught instanceof Error ? caught.message : "OCR 识别失败";
+        setImageAttachments((current) =>
+          current.map((item) =>
+            item.id === attachment.id
+              ? { ...item, ocrStatus: "error", error: message }
+              : item
+          )
+        );
+        throw new Error(`图片 ${attachment.fileName} 识别失败：${message}`);
+      }
+    }
+
+    return recognized.join("\n\n");
+  }
+
+  function removeImageAttachment(attachmentId: string) {
+    setImageAttachments((current) => {
+      const target = current.find((item) => item.id === attachmentId);
+      if (target) {
+        revokeAttachmentUrls(target);
+      }
+      return current.filter((item) => item.id !== attachmentId);
+    });
+    setImageEditor((current) =>
+      current?.attachmentId === attachmentId ? null : current
+    );
+  }
+
+  function updateImageAnnotation(attachmentId: string, blob: Blob, previewUrl: string) {
+    setImageAttachments((current) =>
+      current.map((item) => {
+        if (item.id !== attachmentId) {
+          return item;
+        }
+        if (item.annotatedPreviewUrl) {
+          URL.revokeObjectURL(item.annotatedPreviewUrl);
+        }
+        return {
+          ...item,
+          annotatedBlob: blob,
+          annotatedPreviewUrl: previewUrl,
+          ocrStatus: "idle",
+          recognizedText: undefined,
+          error: undefined
+        };
+      })
+    );
+  }
+
+  function clearImageAttachments() {
+    setImageAttachments((current) => {
+      current.forEach(revokeAttachmentUrls);
+      return [];
+    });
+    setImageEditor(null);
+  }
+
+  function toMessageAttachments(attachments: ImageAttachment[]): ChatMessageAttachment[] {
+    return attachments.map((attachment) => ({
+      id: attachment.id,
+      kind: "image",
+      fileName: attachment.fileName,
+      previewUrl: attachment.annotatedPreviewUrl ?? attachment.previewUrl,
+      annotated: Boolean(attachment.annotatedPreviewUrl)
+    }));
+  }
+
+  function revokeAttachmentUrls(attachment: ImageAttachment) {
+    URL.revokeObjectURL(attachment.previewUrl);
+    if (attachment.annotatedPreviewUrl) {
+      URL.revokeObjectURL(attachment.annotatedPreviewUrl);
     }
   }
 
-  async function generatePlot(messageId: string, request: PlotPreviewRequest) {
+  async function generatePlot(
+    messageId: string,
+    request: PlotPreviewRequest,
+    options?: { persistedMessageId?: boolean; sessionId?: string | null }
+  ) {
     const targetMessage = messages.find((message) => message.id === messageId);
     setMessages((current) =>
       current.map((item) =>
@@ -516,8 +662,8 @@ export function ChatWorkspace() {
     try {
       const plot = await createPlotPreview({
         ...request,
-        session_id: metadata.sessionId,
-        message_id: targetMessage?.persisted ? messageId : null
+        session_id: options?.sessionId ?? metadata.sessionId,
+        message_id: options?.persistedMessageId || targetMessage?.persisted ? messageId : null
       });
       setMessages((current) =>
         current.map((item) =>
@@ -547,11 +693,12 @@ export function ChatWorkspace() {
   function startNewSession() {
     abortControllerRef.current?.abort();
     abortControllerRef.current = null;
+    revokeMessageAttachmentUrls(messages);
     setMessages([]);
     setInput("");
     setError(null);
     setIsStreaming(false);
-    setAttachment({ status: "idle" });
+    clearImageAttachments();
     setMetadata({
       ...initialMetadata,
       answerMode
@@ -645,18 +792,21 @@ export function ChatWorkspace() {
             materials={materials}
             onDeleteDocument={removeDocument}
             onPdfPick={handlePdfPick}
+            onRetry={refreshMaterials}
           />
 
           <Composer
             answerMode={answerMode}
-            attachment={attachment}
             canSubmit={canSubmit}
             disabled={isStreaming}
+            imageAttachments={imageAttachments}
             input={input}
             onAnswerModeChange={setAnswerMode}
-            onClearAttachment={() => setAttachment({ status: "idle" })}
+            onClearAttachments={clearImageAttachments}
+            onEditImage={(attachmentId) => setImageEditor({ attachmentId })}
             onImagePick={handleImagePick}
             onInputChange={setInput}
+            onRemoveImage={removeImageAttachment}
             onSubmit={handleSubmit}
             onStop={stopStreaming}
           />
@@ -668,6 +818,16 @@ export function ChatWorkspace() {
           onClose={() => setPlotModal(null)}
           plot={plotModal.plot}
           title={plotModal.title}
+        />
+      ) : null}
+      {imageEditor ? (
+        <ImageEditorModal
+          attachment={imageAttachments.find((item) => item.id === imageEditor.attachmentId) ?? null}
+          onClose={() => setImageEditor(null)}
+          onSave={(blob, previewUrl) => {
+            updateImageAnnotation(imageEditor.attachmentId, blob, previewUrl);
+            setImageEditor(null);
+          }}
         />
       ) : null}
     </main>
@@ -902,6 +1062,9 @@ function MessageBubble({
           {isUser ? "You" : "Math Agent"}
         </p>
         <div className="mt-2">
+          {message.attachments && message.attachments.length > 0 ? (
+            <MessageAttachments attachments={message.attachments} />
+          ) : null}
           <MathMarkdown inverted={isUser}>
             {message.content ||
               (message.status === "streaming" ? "正在生成回答" : "暂无内容")}
@@ -946,6 +1109,33 @@ function MessageBubble({
         ) : null}
       </div>
     </article>
+  );
+}
+
+function MessageAttachments({ attachments }: { attachments: ChatMessageAttachment[] }) {
+  return (
+    <div className="mb-3 flex max-w-full gap-2 overflow-x-auto pb-1">
+      {attachments.map((attachment) => (
+        <figure
+          className="relative h-28 w-28 shrink-0 overflow-hidden rounded-md border border-white/15 bg-black/10"
+          key={attachment.id}
+        >
+          <img
+            alt={attachment.fileName}
+            className="h-full w-full object-cover"
+            src={attachment.previewUrl}
+          />
+          <figcaption className="absolute inset-x-0 bottom-0 truncate bg-neutral-950/70 px-1.5 py-1 text-[11px] font-medium text-white">
+            {attachment.fileName}
+          </figcaption>
+          {attachment.annotated ? (
+            <span className="absolute left-1 top-1 rounded bg-emerald-600 px-1.5 py-0.5 text-[10px] font-semibold text-white">
+              已标注
+            </span>
+          ) : null}
+        </figure>
+      ))}
+    </div>
   );
 }
 
@@ -1005,12 +1195,14 @@ function MaterialsStrip({
   disabled,
   materials,
   onDeleteDocument,
-  onPdfPick
+  onPdfPick,
+  onRetry
 }: {
   disabled: boolean;
   materials: MaterialsState;
   onDeleteDocument: (documentId: string) => void;
   onPdfPick: (file: File | null) => void;
+  onRetry: () => void;
 }) {
   const pdfInputRef = useRef<HTMLInputElement | null>(null);
   const readyCount = materials.items.filter((item) => item.status === "ready").length;
@@ -1076,7 +1268,17 @@ function MaterialsStrip({
           <span className="text-xs font-medium text-neutral-500">+{materials.items.length - 3}</span>
         ) : null}
         {materials.error ? (
-          <span className="min-w-0 flex-1 text-red-700">{materials.error}</span>
+          <span className="inline-flex min-w-0 flex-1 items-center gap-2 text-red-700">
+            <span className="truncate">{materials.error}</span>
+            <button
+              className="h-7 shrink-0 rounded-md border border-red-200 bg-white px-2 text-xs font-semibold text-red-700"
+              disabled={disabled || materials.loading}
+              onClick={onRetry}
+              type="button"
+            >
+              重试
+            </button>
+          </span>
         ) : null}
       </div>
     </div>
@@ -1085,26 +1287,30 @@ function MaterialsStrip({
 
 function Composer({
   answerMode,
-  attachment,
   canSubmit,
   disabled,
+  imageAttachments,
   input,
   onAnswerModeChange,
-  onClearAttachment,
+  onClearAttachments,
+  onEditImage,
   onImagePick,
   onInputChange,
+  onRemoveImage,
   onSubmit,
   onStop
 }: {
   answerMode: AnswerMode;
-  attachment: AttachmentState;
   canSubmit: boolean;
   disabled: boolean;
+  imageAttachments: ImageAttachment[];
   input: string;
   onAnswerModeChange: (mode: AnswerMode) => void;
-  onClearAttachment: () => void;
-  onImagePick: (file: File | null) => void;
+  onClearAttachments: () => void;
+  onEditImage: (attachmentId: string) => void;
+  onImagePick: (files: FileList | null) => void;
   onInputChange: (value: string) => void;
+  onRemoveImage: (attachmentId: string) => void;
   onSubmit: (event?: FormEvent<HTMLFormElement>) => void;
   onStop: () => void;
 }) {
@@ -1117,13 +1323,19 @@ function Composer({
     >
       <div className="mx-auto max-w-5xl space-y-2.5">
         <ModeSelector answerMode={answerMode} disabled={disabled} onChange={onAnswerModeChange} />
-        <AttachmentStatus attachment={attachment} onClear={onClearAttachment} />
+        <AttachmentTray
+          attachments={imageAttachments}
+          disabled={disabled}
+          onClearAll={onClearAttachments}
+          onEdit={onEditImage}
+          onRemove={onRemoveImage}
+        />
         <div className="flex gap-2">
           <div className="flex min-w-0 flex-1 items-end gap-2 rounded-lg border border-neutral-300 bg-white px-2.5 py-2 focus-within:border-emerald-600 focus-within:ring-2 focus-within:ring-emerald-100">
             <button
               aria-label="上传图片"
               className="mb-1 h-9 w-9 shrink-0 rounded-md border border-neutral-200 text-lg font-semibold text-neutral-600 transition hover:border-emerald-300 hover:text-emerald-700"
-              disabled={disabled || attachment.status === "recognizing"}
+              disabled={disabled}
               onClick={() => fileInputRef.current?.click()}
               title="上传图片"
               type="button"
@@ -1134,7 +1346,11 @@ function Composer({
               accept="image/png,image/jpeg,image/webp,image/gif"
               className="sr-only"
               disabled={disabled}
-              onChange={(event) => onImagePick(event.target.files?.[0] ?? null)}
+              multiple
+              onChange={(event) => {
+                onImagePick(event.target.files);
+                event.currentTarget.value = "";
+              }}
               ref={fileInputRef}
               type="file"
             />
@@ -1202,45 +1418,281 @@ function ModeSelector({
   );
 }
 
-function AttachmentStatus({
-  attachment,
-  onClear
+function AttachmentTray({
+  attachments,
+  disabled,
+  onClearAll,
+  onEdit,
+  onRemove
 }: {
-  attachment: AttachmentState;
-  onClear: () => void;
+  attachments: ImageAttachment[];
+  disabled: boolean;
+  onClearAll: () => void;
+  onEdit: (attachmentId: string) => void;
+  onRemove: (attachmentId: string) => void;
 }) {
-  if (attachment.status === "idle") {
+  if (attachments.length === 0) {
     return null;
   }
 
-  const statusText =
-    attachment.status === "recognizing"
-      ? "正在识别"
-      : attachment.status === "ready"
-        ? "已识别为可编辑文本"
-        : attachment.message;
+  return (
+    <div className="rounded-lg border border-neutral-200 bg-neutral-50 p-2">
+      <div className="flex items-center justify-between gap-3 px-1 pb-2">
+        <span className="text-xs font-semibold uppercase text-neutral-500">
+          图片附件
+        </span>
+        <button
+          className="h-7 rounded-md border border-neutral-200 bg-white px-2 text-xs font-semibold text-neutral-600 disabled:opacity-50"
+          disabled={disabled}
+          onClick={onClearAll}
+          type="button"
+        >
+          清空
+        </button>
+      </div>
+      <div className="flex gap-2 overflow-x-auto pb-1">
+        {attachments.map((attachment) => (
+          <div
+            className="group relative h-24 w-24 shrink-0 overflow-hidden rounded-md border border-neutral-200 bg-white shadow-sm"
+            key={attachment.id}
+          >
+            <button
+              aria-label={`预览图片 ${attachment.fileName}`}
+              className="h-full w-full"
+              disabled={disabled}
+              onClick={() => onEdit(attachment.id)}
+              type="button"
+            >
+              <img
+                alt={attachment.fileName}
+                className="h-full w-full object-cover"
+                src={attachment.annotatedPreviewUrl ?? attachment.previewUrl}
+              />
+              <span className="absolute inset-x-0 bottom-0 truncate bg-neutral-950/65 px-1.5 py-1 text-left text-[11px] font-medium text-white">
+                {attachment.fileName}
+              </span>
+            </button>
+            <span
+              className={`absolute left-1 top-1 rounded px-1.5 py-0.5 text-[10px] font-semibold ${
+                attachment.ocrStatus === "error"
+                  ? "bg-red-600 text-white"
+                  : attachment.ocrStatus === "recognizing"
+                    ? "bg-amber-500 text-white"
+                    : attachment.annotatedPreviewUrl
+                      ? "bg-emerald-600 text-white"
+                      : "bg-white/90 text-neutral-700"
+              }`}
+              title={attachment.error}
+            >
+              {attachment.ocrStatus === "recognizing"
+                ? "识别中"
+                : attachment.ocrStatus === "error"
+                  ? "失败"
+                  : attachment.annotatedPreviewUrl
+                    ? "已标注"
+                    : "附件"}
+            </span>
+            <button
+              aria-label={`移除图片 ${attachment.fileName}`}
+              className="absolute right-1 top-1 h-6 w-6 rounded bg-white/90 text-sm font-semibold text-neutral-700 opacity-0 transition hover:bg-white group-hover:opacity-100 focus:opacity-100"
+              disabled={disabled}
+              onClick={() => onRemove(attachment.id)}
+              type="button"
+            >
+              ×
+            </button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ImageEditorModal({
+  attachment,
+  onClose,
+  onSave
+}: {
+  attachment: ImageAttachment | null;
+  onClose: () => void;
+  onSave: (blob: Blob, previewUrl: string) => void;
+}) {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const imageRef = useRef<HTMLImageElement | null>(null);
+  const drawingRef = useRef(false);
+  const [hasMarks, setHasMarks] = useState(false);
+
+  if (!attachment) {
+    return null;
+  }
+
+  const activeAttachment = attachment;
+  const imageUrl = activeAttachment.annotatedPreviewUrl ?? activeAttachment.previewUrl;
+
+  function getCanvasPoint(event: PointerEvent<HTMLCanvasElement>) {
+    const canvas = canvasRef.current;
+    if (!canvas) {
+      return null;
+    }
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    return {
+      x: (event.clientX - rect.left) * scaleX,
+      y: (event.clientY - rect.top) * scaleY
+    };
+  }
+
+  function prepareCanvas() {
+    const canvas = canvasRef.current;
+    const image = imageRef.current;
+    if (!canvas || !image) {
+      return;
+    }
+    const displayWidth = image.clientWidth || image.naturalWidth;
+    const displayHeight = image.clientHeight || image.naturalHeight;
+    canvas.width = Math.max(1, Math.round(displayWidth));
+    canvas.height = Math.max(1, Math.round(displayHeight));
+  }
+
+  function beginDraw(event: PointerEvent<HTMLCanvasElement>) {
+    prepareCanvas();
+    const point = getCanvasPoint(event);
+    const canvas = canvasRef.current;
+    if (!point || !canvas) {
+      return;
+    }
+    drawingRef.current = true;
+    canvas.setPointerCapture(event.pointerId);
+    const context = canvas.getContext("2d");
+    if (!context) {
+      return;
+    }
+    context.strokeStyle = "#f97316";
+    context.lineWidth = 5;
+    context.lineCap = "round";
+    context.lineJoin = "round";
+    context.beginPath();
+    context.moveTo(point.x, point.y);
+    setHasMarks(true);
+  }
+
+  function draw(event: PointerEvent<HTMLCanvasElement>) {
+    if (!drawingRef.current) {
+      return;
+    }
+    const point = getCanvasPoint(event);
+    const context = canvasRef.current?.getContext("2d");
+    if (!point || !context) {
+      return;
+    }
+    context.lineTo(point.x, point.y);
+    context.stroke();
+  }
+
+  function endDraw(event: PointerEvent<HTMLCanvasElement>) {
+    drawingRef.current = false;
+    canvasRef.current?.releasePointerCapture(event.pointerId);
+  }
+
+  function clearMarks() {
+    const canvas = canvasRef.current;
+    if (!canvas) {
+      return;
+    }
+    canvas.getContext("2d")?.clearRect(0, 0, canvas.width, canvas.height);
+    setHasMarks(false);
+  }
+
+  async function saveAnnotation() {
+    const canvas = canvasRef.current;
+    const image = imageRef.current;
+    if (!canvas || !image) {
+      onClose();
+      return;
+    }
+
+    const output = document.createElement("canvas");
+    output.width = image.naturalWidth;
+    output.height = image.naturalHeight;
+    const context = output.getContext("2d");
+    if (!context) {
+      onClose();
+      return;
+    }
+    context.drawImage(image, 0, 0, output.width, output.height);
+    context.drawImage(canvas, 0, 0, output.width, output.height);
+    const blob = await new Promise<Blob | null>((resolve) =>
+      output.toBlob(resolve, activeAttachment.file.type || "image/png")
+    );
+    if (!blob) {
+      onClose();
+      return;
+    }
+    onSave(blob, URL.createObjectURL(blob));
+  }
 
   return (
-    <div className="flex items-center justify-between gap-3 rounded-md border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm">
-      <div className="min-w-0">
-        <span className="font-semibold text-neutral-900">
-          {attachment.fileName ?? "图片附件"}
-        </span>
-        <span
-          className={`ml-2 ${
-            attachment.status === "error" ? "text-red-700" : "text-neutral-600"
-          }`}
-        >
-          {statusText}
-        </span>
+    <div
+      aria-label="图片预览与标注"
+      aria-modal="true"
+      className="fixed inset-0 z-50 bg-neutral-950/60 p-4 backdrop-blur-sm"
+      role="dialog"
+    >
+      <div className="mx-auto flex h-full max-w-5xl flex-col rounded-lg bg-white shadow-2xl">
+        <div className="flex shrink-0 items-center justify-between gap-3 border-b border-neutral-200 px-4 py-3">
+          <div className="min-w-0">
+            <p className="truncate text-sm font-semibold text-neutral-950">{activeAttachment.fileName}</p>
+            <p className="text-xs text-neutral-500">可在图片上圈画重点后再发送</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              className="h-9 rounded-md border border-neutral-200 px-3 text-sm font-semibold text-neutral-700"
+              disabled={!hasMarks}
+              onClick={clearMarks}
+              type="button"
+            >
+              清除标注
+            </button>
+            <button
+              className="h-9 rounded-md bg-neutral-950 px-3 text-sm font-semibold text-white"
+              onClick={saveAnnotation}
+              type="button"
+            >
+              完成
+            </button>
+            <button
+              className="h-9 rounded-md border border-neutral-200 px-3 text-sm font-semibold text-neutral-700"
+              onClick={onClose}
+              type="button"
+            >
+              关闭
+            </button>
+          </div>
+        </div>
+        <div className="min-h-0 flex-1 bg-neutral-100 p-4">
+          <div className="mx-auto flex h-full max-h-full max-w-full items-center justify-center overflow-hidden rounded-md bg-white">
+            <div className="relative max-h-full max-w-full">
+              <img
+                alt={activeAttachment.fileName}
+                className="block max-h-full max-w-full object-contain"
+                onLoad={prepareCanvas}
+                ref={imageRef}
+                src={imageUrl}
+              />
+              <canvas
+                aria-label="图片标注画布"
+                className="absolute inset-0 h-full w-full touch-none"
+                onPointerCancel={endDraw}
+                onPointerDown={beginDraw}
+                onPointerMove={draw}
+                onPointerUp={endDraw}
+                ref={canvasRef}
+              />
+            </div>
+          </div>
+        </div>
       </div>
-      <button
-        className="h-8 shrink-0 rounded-md border border-neutral-200 bg-white px-3 text-xs font-semibold text-neutral-700"
-        onClick={onClear}
-        type="button"
-      >
-        清除
-      </button>
     </div>
   );
 }
@@ -1444,6 +1896,14 @@ function isRetrievedSource(value: unknown): value is RetrievedSource {
   );
 }
 
+function revokeMessageAttachmentUrls(messages: ChatMessage[]) {
+  for (const message of messages) {
+    for (const attachment of message.attachments ?? []) {
+      URL.revokeObjectURL(attachment.previewUrl);
+    }
+  }
+}
+
 function latestQuestionType(messages: ChatMessage[]): QuestionType {
   const latest = [...messages]
     .reverse()
@@ -1465,6 +1925,9 @@ function isQuestionType(value: unknown): value is QuestionType {
 }
 
 function getPlotTypeLabel(plotType: PlotPreviewResponse["plot_type"]) {
+  if (plotType === "implicit3d") {
+    return "三维隐式曲面";
+  }
   if (plotType === "surface3d") {
     return "三维曲面";
   }

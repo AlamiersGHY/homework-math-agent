@@ -214,7 +214,7 @@ Phase 1 planner metadata 形态：
 - `messages` 应返回该会话的完整本地消息历史，按 `created_at` 升序排列；不得用固定 50 条截断作为默认详情行为。
 - `artifacts` 应按 `created_at` 升序返回，便于前端稳定恢复历史状态。
 - `artifact_type="chat_metadata"` 可保存该 assistant message 对应的 planner 元数据、题型、可视化意图等恢复信息。
-- `artifact_type="plot_suggestion"` 可保存尚未生成 plot preview 的可视化建议；前端恢复历史会话时应继续展示生成入口。
+- `artifact_type="plot_suggestion"` 可保存 planner 给出的可视化建议；当前前端会在 assistant 回答完成后自动调用 `/plots/preview`，历史恢复时若没有对应 `plot_preview` 仍可展示生成入口。
 - `artifact_type="plot_preview"` 保存已生成图形，`message_id` 应优先指向对应 assistant message；前端可对旧的无 `message_id` artifacts 做兼容恢复，但新写入不应依赖无绑定状态。
 
 ## DELETE /sessions/{session_id}
@@ -250,10 +250,10 @@ Phase 1 planner metadata 形态：
 
 约定：
 
-- `recognized_text` 是前端展示和用户编辑的默认文本。
+- `recognized_text` 是 OCR 识别结果。当前聊天式附件 UX 不把该文本直接塞进 textarea；前端在用户发送时把它作为隐藏的 `confirmed_ocr_text` 传给 chat。
 - `confidence` 可为空或为 provider 估计值。
 - `warnings` 用于提示识别不确定、公式可能缺失等问题。
-- 前端可以把 `recognized_text` 预填到同一个聊天输入框，但不得自动提交到 `POST /chat/stream`。
+- 前端不得在用户可见输入框中暴露未确认的 OCR 中间文本；OCR 可以在发送前或发送时执行，但必须由用户显式发送后才进入 `POST /chat/stream`。
 - OCR 失败时返回统一错误 JSON。
 
 ## POST /plots/preview
