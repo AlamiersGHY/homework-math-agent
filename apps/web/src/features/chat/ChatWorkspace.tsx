@@ -109,6 +109,7 @@ type MaterialsState = {
   loading: boolean;
   uploading: boolean;
   error: string | null;
+  notice: string | null;
 };
 
 const initialMetadata: ChatMetadata = {
@@ -131,7 +132,8 @@ export function ChatWorkspace() {
     items: [],
     loading: true,
     uploading: false,
-    error: null
+    error: null,
+    notice: null
   });
   const [imageAttachments, setImageAttachments] = useState<ImageAttachment[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
@@ -286,21 +288,30 @@ export function ChatWorkspace() {
       return;
     }
 
-    setMaterials((current) => ({ ...current, uploading: true, error: null }));
+    setMaterials((current) => ({ ...current, uploading: true, error: null, notice: null }));
     try {
       const uploaded = await uploadDocument(file);
+      const notice =
+        uploaded.status === "ready"
+          ? `已索引 ${uploaded.filename}，后续提问会自动检索并显示引用。`
+          : null;
       setMaterials((current) => ({
         ...current,
         items: upsertDocument(current.items, uploaded),
         uploading: false,
-        error: uploaded.status === "failed" ? uploaded.error_message ?? "PDF 未提取到可检索文本" : null
+        error: uploaded.status === "failed" ? uploaded.error_message ?? "PDF 未提取到可检索文本" : null,
+        notice
       }));
+      window.setTimeout(() => {
+        setMaterials((current) => ({ ...current, notice: null }));
+      }, 5000);
       await refreshMaterials();
     } catch (caught: unknown) {
       setMaterials((current) => ({
         ...current,
         uploading: false,
-        error: caught instanceof Error ? caught.message : "PDF 上传失败"
+        error: caught instanceof Error ? caught.message : "PDF 上传失败",
+        notice: null
       }));
     }
   }
@@ -311,7 +322,8 @@ export function ChatWorkspace() {
       await deleteDocument(documentId);
       setMaterials((current) => ({
         ...current,
-        items: current.items.filter((item) => item.id !== documentId)
+        items: current.items.filter((item) => item.id !== documentId),
+        notice: null
       }));
     } catch (caught: unknown) {
       setMaterials((current) => ({
@@ -671,7 +683,10 @@ export function ChatWorkspace() {
         )
       );
     } catch (caught: unknown) {
-      const plotError = caught instanceof Error ? caught.message : "图形生成失败";
+      const plotError =
+        caught instanceof Error
+          ? formatPlotErrorMessage(caught.message)
+          : "图形生成失败：当前题目没有可直接绘制的明确函数或曲面。";
       setMessages((current) =>
         current.map((item) =>
           item.id === messageId ? { ...item, plotError, plotLoading: false } : item
@@ -1289,6 +1304,9 @@ function MaterialsStrip({
               重试
             </button>
           </span>
+        ) : null}
+        {!materials.error && materials.notice ? (
+          <span className="min-w-0 flex-1 truncate text-emerald-700">{materials.notice}</span>
         ) : null}
       </div>
     </div>
@@ -1949,9 +1967,20 @@ function getPlotTypeLabel(plotType: PlotPreviewResponse["plot_type"]) {
 
 function formatPageRange(source: RetrievedSource) {
   if (source.page_start === source.page_end) {
-    return `p. ${source.page_start}`;
+    return `第 ${source.page_start} 页`;
   }
-  return `pp. ${source.page_start}-${source.page_end}`;
+  return `第 ${source.page_start}-${source.page_end} 页`;
+}
+
+function formatPlotErrorMessage(message: string): string {
+  if (
+    message.includes("Expression is not valid syntax") ||
+    message.includes("incomplete LaTeX") ||
+    message.includes("Expression is required")
+  ) {
+    return "图形生成失败：当前题目没有可直接绘制的明确函数或曲面，请补充类似 z = f(x,y) 或 x^2 + y^2 + z^2 = 1 的表达式。";
+  }
+  return `图形生成失败：${message}`;
 }
 
 function upsertDocument(items: DocumentSummary[], document: DocumentSummary): DocumentSummary[] {

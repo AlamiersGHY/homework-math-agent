@@ -18,11 +18,14 @@ def search_retrieval(
     min_score: float = MIN_SCORE,
 ) -> RetrievalSearchResponse:
     normalized_query = query.strip()
+    repo = DocumentRepository(db)
+    if _is_material_overview_query(normalized_query):
+        return RetrievalSearchResponse(query=query, results=_overview_sources(repo, top_k=top_k))
+
     query_terms = _tokenize(normalized_query)
     if not query_terms:
         return RetrievalSearchResponse(query=query, results=[])
 
-    repo = DocumentRepository(db)
     scored: list[tuple[float, DocumentChunkRecord]] = []
     for chunk in repo.list_ready_chunks():
         score = _score_chunk(query_terms, normalized_query, chunk.retrieval_text)
@@ -67,6 +70,46 @@ def _source_from_chunk(
         page_end=chunk.page_end,
         section_title=chunk.section_title,
         snippet=_snippet(chunk.text, query_terms),
+    )
+
+
+def _overview_sources(repo: DocumentRepository, top_k: int) -> list[RetrievedSource]:
+    chunks_by_document: dict[str, DocumentChunkRecord] = {}
+    for chunk in repo.list_ready_chunks():
+        if chunk.document_id not in chunks_by_document:
+            chunks_by_document[chunk.document_id] = chunk
+        if len(chunks_by_document) >= top_k:
+            break
+
+    return [
+        _source_from_chunk(
+            index=index + 1,
+            score=1.0,
+            chunk=chunk,
+            query_terms=_tokenize(chunk.document.filename),
+        )
+        for index, chunk in enumerate(chunks_by_document.values())
+    ]
+
+
+def _is_material_overview_query(query: str) -> bool:
+    normalized = query.lower().replace(" ", "")
+    material_markers = ["pdf", "材料", "资料", "课件", "讲义", "教材", "上传", "附件"]
+    overview_markers = [
+        "你能看到",
+        "看得到",
+        "看到我",
+        "上传了吗",
+        "上传成功",
+        "讲了什么",
+        "什么内容",
+        "有哪些",
+        "现在呢",
+        "thispdf",
+        "uploadedpdf",
+    ]
+    return any(marker in normalized for marker in material_markers) and any(
+        marker in normalized for marker in overview_markers
     )
 
 

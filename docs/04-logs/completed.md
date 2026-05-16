@@ -245,3 +245,14 @@
 - Added plot expression normalization for common LaTeX/natural input forms, including root/power syntax, full-width equals, `z=` prefixes, simple implicit multiplication, and implicit equations with variables on the right side while retaining unsafe-expression rejection.
 - Fixed local dev orchestration so `scripts/dev.ps1` calls `npm run dev:web-only`, avoiding recursive `npm run dev` when launched from `apps/web`; documented the new web-only and math-test commands.
 - Verified `.\scripts\release-check.ps1` on 2026-05-16 12:22 +08: 64 backend tests passed, 18 deterministic evals passed, frontend typecheck passed, `npm run test:math` passed, frontend build passed, mock API smoke including PDF RAG passed, browser QA passed with screenshots under `.cache/qa/20260516-122246`, and dependency audit advisory remained tracked under TD-005.
+
+## Real PDF RAG And OCR Plot Robustness Fix
+
+- Fixed the RAG trigger gap where uploaded course materials were only used for explicit "根据课本/PDF" questions; course-topic questions such as "解释一下复合函数求导法则" now attempt retrieval when ready documents exist, and material overview questions such as "你能看到我上传的PDF吗" return real uploaded-document chunks instead of empty citations.
+- Added a temporary-DB real PDF QA script, `scripts/qa_real_pdf_rag.py`, for user-provided local PDFs that should not be committed; it validates upload, page/chunk extraction, retrieval, chat citation metadata, and history metadata replay.
+- Fixed the OCR/plot planner bug that treated surface-integral assignments like `I = \iint_\Sigma ...` as `implicit3d` equations; the planner now rejects integral assignments and prefers explicit geometry such as `z = \sqrt{1-x^2-y^2}` for a supported `surface3d` preview.
+- Added plot-suggestion validation before metadata reaches the frontend and made truncated LaTeX roots such as `\sqrt{1` fail clearly instead of being auto-repaired into a misleading plot.
+- Improved frontend PDF upload feedback, localized citation page labels, and replaced raw plot syntax errors with a user-level message that asks for a drawable function or surface expression.
+- Expanded browser QA to cover implicit PDF overview questions and OCR-like surface-integral plotting without exposing `Expression is not valid syntax`.
+- Verified `scripts/qa_real_pdf_rag.py` on 2026-05-16 with `C:\Users\Alami\Downloads\第13讲 复合函数求导法则(2).pdf`: upload produced 36 pages and 36 chunks; retrieval and chat citations referenced page 1 of the real PDF; session metadata persisted citations for history replay.
+- Verified `.\scripts\release-check.ps1` on 2026-05-16 13:27 +08: 70 backend tests passed, 18 deterministic evals passed, frontend typecheck passed, `npm run test:math` passed, frontend build passed, mock API smoke passed, expanded browser QA passed with screenshots under `.cache/qa/20260516-132721`, and dependency audit advisory remained tracked under TD-005.

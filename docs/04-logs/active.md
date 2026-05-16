@@ -186,6 +186,12 @@ Continue from the verified PDF RAG, citation, attachment UX, and automatic plot 
 - Plot expression handling now normalizes common LaTeX and natural-input forms before AST validation, including `\sqrt{...}`, `x^{2}`, full-width equals, `z=` prefixes, simple implicit multiplication, and variable-bearing right sides of implicit 3D equations while preserving unsafe-expression rejection.
 - `apps/web/package.json` now separates the root dev stack entry from `dev:web-only`; `scripts/dev.ps1` calls `dev:web-only` to avoid recursive `npm run dev` when launched from the web package. `next.config.ts` allows the local dev origins used by localhost/127.0.0.1 bridge access.
 - `.\scripts\release-check.ps1` passed on 2026-05-16 12:22 +08 after the robust formula-rendering, local SQLite schema repair, planner visualization-boundary, and plot expression normalization unit: 64 backend tests, 18 deterministic evals, frontend typecheck, math-rendering normalization tests, frontend production build, mock API smoke including PDF RAG, browser QA desktop/mobile, and dependency audit advisory completed. Browser QA screenshots are under `.cache/qa/20260516-122246`. Live LLM/OCR smokes were intentionally not run in this validation pass.
+- User feedback on 2026-05-16 identified two remaining blocking issues: OCR-derived surface-integral questions could still surface `Expression is not valid syntax` because the planner treated `I=\iint...` as an implicit surface, and PDF/RAG needed a user-level full-chain proof using the user's real file `C:\Users\Alami\Downloads\第13讲 复合函数求导法则(2).pdf`.
+- The OCR/plot root cause is now fixed: planner rejects integral/result assignments as plot equations, validates plot suggestions before emitting metadata, and prefers explicit geometry such as `z=\sqrt{1-x^2-y^2}` as `surface3d`; truncated LaTeX roots now fail with a clear validation message instead of rendering misleading plots.
+- The RAG trigger gap is now fixed: uploaded ready materials are consulted for course-topic questions even without explicit "根据课本/PDF" wording, and material overview questions such as "你能看到我上传的PDF吗" return real uploaded-document chunks rather than empty sources.
+- `scripts/qa_real_pdf_rag.py` now provides a temporary-DB real PDF QA path for local user PDFs; with the user's PDF it verified 36 pages, 36 chunks, retrieval against page 1, chat citation metadata, and history metadata replay.
+- Browser QA now includes PDF overview citation display and OCR-like surface-integral plotting without raw plot syntax errors.
+- `.\scripts\release-check.ps1` passed on 2026-05-16 13:27 +08 after the real PDF RAG and OCR plot robustness unit: 70 backend tests, 18 deterministic evals, frontend typecheck, math-rendering normalization tests, frontend production build, mock API smoke, expanded browser QA desktop/mobile, and dependency audit advisory completed. Browser QA screenshots are under `.cache/qa/20260516-132721`. Real PDF QA also passed separately with the user-provided file. Live LLM/OCR smokes were intentionally not run in this validation pass.
 
 ## Next Tasks
 
@@ -193,6 +199,7 @@ Continue from the verified PDF RAG, citation, attachment UX, and automatic plot 
 - Begin preferences + lightweight memory planning and implementation only after documenting the local schema/API boundary; keep it local-only and bounded.
 - Improve retrieval ranking/chunking after the v1 lexical baseline only if tests and ADR updates keep citation safety intact.
 - Defer live Doubao OCR smoke until the configured `DOUBAO_VISION_MODEL` points to an accessible Ark endpoint.
+- Restart any long-running local FastAPI/Next dev processes that were started before this unit; non-reload uvicorn and built Next bundles will not pick up these fixes until restarted.
 
 ## Blockers
 

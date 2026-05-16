@@ -246,7 +246,7 @@ async function runDesktopFlow(browser, baseUrl, screenshotDir) {
   await assertNoRawDebugText(page);
   await page.screenshot({ path: path.join(screenshotDir, "desktop-materials.jpg"), type: "jpeg", quality: 84 });
 
-  await page.locator("textarea").first().fill("根据课本说明 uniform continuity definition");
+  await page.locator("textarea").first().fill("解释一下 uniform continuity definition");
   await page.getByRole("button", { name: /^\u53d1\u9001$/ }).click();
   await waitForText(page, /\u5f15\u7528\u6750\u6599/, "desktop citation panel did not render");
   await waitForText(page, /analysis-notes\.pdf/, "desktop citation filename did not render");
@@ -268,9 +268,19 @@ async function runDesktopFlow(browser, baseUrl, screenshotDir) {
   await assertNoRawDebugText(page);
   await page.screenshot({ path: path.join(screenshotDir, "desktop-citations.jpg"), type: "jpeg", quality: 84 });
 
+  await page.getByRole("button", { name: /\u65b0\u5efa/ }).first().click();
+  await page.locator("article").first().waitFor({ state: "detached", timeout: 15000 }).catch(() => undefined);
+  await page.locator("textarea").first().fill("你能看到我上传的PDF吗");
+  await page.getByRole("button", { name: /^\u53d1\u9001$/ }).click();
+  await waitForText(page, /\u5f15\u7528\u6750\u6599/, "PDF overview citation panel did not render");
+  await waitForText(page, /analysis-notes\.pdf/, "PDF overview citation filename did not render");
+  await assertViewportFit(page, "desktop PDF overview citation answer");
+  await assertNoRawDebugText(page);
+  await page.screenshot({ path: path.join(screenshotDir, "desktop-pdf-overview-citations.jpg"), type: "jpeg", quality: 84 });
+
   await page.reload({ waitUntil: "networkidle" });
   await page.getByText("Math Agent").waitFor({ timeout: 15000 });
-  await page.getByRole("button", { name: /\u6839\u636e\u8bfe\u672c\u8bf4\u660e uniform continuity/ }).first().click();
+  await page.getByRole("button", { name: /解释一下 uniform continuity/ }).first().click();
   await waitForText(page, /\u5f15\u7528\u6750\u6599/, "history did not restore citation panel");
   await waitForText(page, /analysis-notes\.pdf/, "history did not restore citation filename");
   await assertViewportFit(page, "desktop history citations");
@@ -322,6 +332,27 @@ async function runDesktopFlow(browser, baseUrl, screenshotDir) {
   await assertPlotlyCanvasPainted(page, page.locator(".js-plotly-plot").first(), "desktop hemisphere plot");
   await assertViewportFit(page, "desktop hemisphere plot");
   await page.screenshot({ path: path.join(screenshotDir, "desktop-hemisphere-plot.jpg"), type: "jpeg", quality: 84 });
+
+  await page.getByRole("button", { name: /\u65b0\u5efa/ }).first().click();
+  await page.locator("article").first().waitFor({ state: "detached", timeout: 15000 }).catch(() => undefined);
+  await page.getByRole("button", { name: /\u76f4\u63a5\u89e3\u7b54/ }).click();
+  await page.locator("textarea").first().fill(
+    "计算曲面积分 I = \\iint_{\\Sigma}(x-x^3)dy dz+(y-y^3)dz dx+(z-z^3)dx dy，其中 \\Sigma 是半球面 z = \\sqrt{1 - x^2 - y^2} 的上侧，请解释空间图形"
+  );
+  const surfaceIntegralPlotRequestPromise = page.waitForRequest((request) => request.url().includes("/plots/preview"));
+  await page.getByRole("button", { name: /^\u53d1\u9001$/ }).click();
+  const surfaceIntegralPlotRequest = await surfaceIntegralPlotRequestPromise;
+  const surfaceIntegralPlotPayload = JSON.parse(surfaceIntegralPlotRequest.postData() || "{}");
+  assertOk(surfaceIntegralPlotPayload.plot_type === "surface3d", "surface integral OCR-like request did not use surface3d");
+  assertOk(
+    /sqrt/.test(surfaceIntegralPlotPayload.expression) && !/^I\s*=/.test(surfaceIntegralPlotPayload.expression),
+    "surface integral OCR-like request used the integral assignment as the plot expression"
+  );
+  await assertPlotlyCanvasPainted(page, page.locator(".js-plotly-plot").first(), "desktop surface integral plot");
+  const surfaceIntegralText = await page.locator("body").innerText();
+  assertOk(!surfaceIntegralText.includes("Expression is not valid syntax"), "surface integral plot exposed raw syntax error");
+  await assertViewportFit(page, "desktop surface integral plot");
+  await page.screenshot({ path: path.join(screenshotDir, "desktop-surface-integral-plot.jpg"), type: "jpeg", quality: 84 });
 
   await page.getByRole("button", { name: /\u65b0\u5efa/ }).first().click();
   await page.locator("article").first().waitFor({ state: "detached", timeout: 15000 }).catch(() => undefined);

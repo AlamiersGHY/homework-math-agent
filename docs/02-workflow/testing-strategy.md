@@ -99,6 +99,7 @@ Evals 存放在 `evals/`，不替代 unit/API tests。
 - `.\scripts\browser-qa.ps1`：生产构建下的桌面 / 移动端浏览器 QA，默认使用 mock LLM/OCR 和临时 SQLite。
 - `.\scripts\release-check.ps1`：完整本地交付检查，包含 `check`、mock API smoke、浏览器 QA 和依赖审计提示。
 - `.\scripts\release-check.ps1 -LiveLLM`：在本地真实 LLM 配置存在时额外运行 OpenAI-compatible provider smoke。
+- `$env:PYTHONPATH="apps/api/src"; apps/api/.venv/Scripts/python.exe scripts/qa_real_pdf_rag.py --pdf "<local.pdf>"`：用真实本地 PDF 和临时 SQLite 验证上传、切块、检索、chat citation 和历史 metadata 链路；PDF 文件不进入仓库。
 
 如果测试命令尚不存在，Agent 应说明“测试基础设施尚未建立”，并记录下一步应补的脚本或测试。
 

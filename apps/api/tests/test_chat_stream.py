@@ -100,6 +100,40 @@ async def test_chat_stream_returns_retrieved_sources_when_material_matches(isola
 
 
 @pytest.mark.asyncio
+async def test_chat_stream_probes_uploaded_material_for_course_topic(isolated_database) -> None:
+    with isolated_database.SessionLocal() as db:
+        ingest_pdf_document(
+            db=db,
+            content=_build_pdf(
+                [
+                    "Composite function derivative rule. Chain rule for multivariable functions.",
+                    "The chain rule explains how derivatives pass through intermediate variables.",
+                ]
+            ),
+            filename="chain-rule-notes.pdf",
+            content_type="application/pdf",
+        )
+        events = [
+            event
+            async for event in stream_chat_with_provider(
+                request=ChatStreamRequest(
+                    message="explain the chain rule definition",
+                    answer_mode="guided",
+                ),
+                session_id="session-course-topic-rag",
+                provider=FakeProvider(),
+                db=db,
+            )
+        ]
+
+    metadata = _first_event_data("".join(events), "metadata")
+
+    assert metadata["retrieval_attempted"] is True
+    assert metadata["retrieved_sources"]
+    assert metadata["citations"][0]["filename"] == "chain-rule-notes.pdf"
+
+
+@pytest.mark.asyncio
 async def test_chat_stream_does_not_fabricate_sources_when_retrieval_is_empty(isolated_database) -> None:
     with isolated_database.SessionLocal() as db:
         events = [

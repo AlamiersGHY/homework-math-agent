@@ -146,6 +146,10 @@ class DocumentRepository:
         statement = select(DocumentRecord).order_by(DocumentRecord.updated_at.desc())
         return self.db.scalars(statement).all()
 
+    def has_ready_documents(self) -> bool:
+        statement = select(DocumentRecord.id).where(DocumentRecord.status == "ready").limit(1)
+        return self.db.scalars(statement).first() is not None
+
     def create_document(
         self,
         filename: str,

@@ -5,6 +5,8 @@ import re
 from math_agent_api.schemas.agent_policy import AgentPolicyPlan, PlotSuggestion
 from math_agent_api.schemas.chat import ChatStreamRequest
 from math_agent_api.schemas.common import AnswerMode, PlotType, QuestionType
+from math_agent_api.schemas.plots import PlotPreviewRequest
+from math_agent_api.services.plot_service import PlotValidationError, validate_plot_request
 
 
 VISUALIZATION_TOKENS = [
@@ -33,6 +35,40 @@ VISUALIZATION_TOKENS = [
 ]
 SPACE_TOKENS = ["三维", "空间", "立体", "曲面", "几何曲面", "3d", "surface", "涓夌淮", "绌洪棿", "鏇查潰"]
 SOURCE_TOKENS = ["课本", "教材", "讲义", "来源", "引用", "根据", "PDF", "pdf", "璇炬湰", "鏁欐潗", "璁蹭箟", "鏉ユ簮", "寮曠敤", "鏍规嵁"]
+MATERIAL_REFERENCE_TOKENS = [
+    "课本",
+    "教材",
+    "讲义",
+    "材料",
+    "资料",
+    "pdf",
+    "PDF",
+    "上传",
+    "附件",
+    "引用",
+    "来源",
+    "根据",
+    "这份",
+    "这个",
+    "现在",
+    "课件",
+]
+COURSE_TOPIC_TOKENS = [
+    "定义",
+    "定理",
+    "法则",
+    "概念",
+    "性质",
+    "说明",
+    "解释",
+    "为什么",
+    "是什么",
+    "讲了什么",
+    "核心",
+    "复合函数",
+    "链式法则",
+    "求导法则",
+]
 
 
 def active_message_for_request(request: ChatStreamRequest) -> str:
@@ -157,6 +193,18 @@ def create_plot_suggestion(message: str, question_type: QuestionType) -> PlotSug
         return None
 
     normalized = _compact(message)
+    expression = _extract_expression_after_equals(message)
+    if expression and _looks_like_upper_hemisphere(message, normalized):
+        return _valid_plot_suggestion(
+            PlotSuggestion(
+                plot_type=PlotType.SURFACE3D,
+                expression=expression,
+                variables=["x", "y"],
+                ranges={"x": (-1, 1), "y": (-1, 1)},
+                source="agent",
+            )
+        )
+
     if _looks_like_upper_hemisphere(message, normalized):
         return PlotSuggestion(
             plot_type=PlotType.SURFACE3D,
@@ -177,40 +225,53 @@ def create_plot_suggestion(message: str, question_type: QuestionType) -> PlotSug
 
     implicit_equation = _extract_implicit3d_equation(message)
     if implicit_equation is not None:
-        return PlotSuggestion(
-            plot_type=PlotType.IMPLICIT3D,
-            expression=implicit_equation,
-            variables=["x", "y", "z"],
-            ranges={"x": (-1.5, 1.5), "y": (-1.5, 1.5), "z": (-1.5, 1.5)},
-            source="agent",
+        return _valid_plot_suggestion(
+            PlotSuggestion(
+                plot_type=PlotType.IMPLICIT3D,
+                expression=implicit_equation,
+                variables=["x", "y", "z"],
+                ranges={"x": (-1.5, 1.5), "y": (-1.5, 1.5), "z": (-1.5, 1.5)},
+                source="agent",
+            )
         )
 
-    expression = _extract_expression_after_equals(message)
     if _looks_like_function2d(message, normalized):
-        return PlotSuggestion(
-            plot_type=PlotType.FUNCTION2D,
-            expression=expression or "sin(x)/x",
-            variables=["x"],
-            ranges={"x": (-6, 6)},
-            source="agent",
+        return _valid_plot_suggestion(
+            PlotSuggestion(
+                plot_type=PlotType.FUNCTION2D,
+                expression=expression or "sin(x)/x",
+                variables=["x"],
+                ranges={"x": (-6, 6)},
+                source="agent",
+            )
         )
 
     if expression and _looks_like_space_request(message, normalized):
-        return PlotSuggestion(
-            plot_type=PlotType.SURFACE3D,
-            expression=expression,
-            variables=["x", "y"],
-            ranges={"x": (-3, 3), "y": (-3, 3)},
-            source="agent",
+        ranges = {"x": (-3, 3), "y": (-3, 3)}
+        if "sqrt" in expression.lower() and "1" in expression:
+            ranges = {"x": (-1, 1), "y": (-1, 1)}
+        return _valid_plot_suggestion(
+            PlotSuggestion(
+                plot_type=PlotType.SURFACE3D,
+                expression=expression,
+                variables=["x", "y"],
+                ranges=ranges,
+                source="agent",
+            )
         )
 
     if expression and ("z=" in normalized or ("x" in normalized and "y" in normalized)):
-        return PlotSuggestion(
-            plot_type=PlotType.SURFACE3D,
-            expression=expression,
-            variables=["x", "y"],
-            ranges={"x": (-3, 3), "y": (-3, 3)},
-            source="agent",
+        ranges = {"x": (-3, 3), "y": (-3, 3)}
+        if "sqrt" in expression.lower() and "1" in expression:
+            ranges = {"x": (-1, 1), "y": (-1, 1)}
+        return _valid_plot_suggestion(
+            PlotSuggestion(
+                plot_type=PlotType.SURFACE3D,
+                expression=expression,
+                variables=["x", "y"],
+                ranges=ranges,
+                source="agent",
+            )
         )
 
     if _looks_like_space_request(message, normalized):
@@ -285,14 +346,24 @@ def _is_visualization_request(message: str, normalized: str) -> bool:
         any(token in message for token in VISUALIZATION_TOKENS)
         or any(token in normalized for token in ["draw", "graph", "visualize", "plot", "surface", "3d"])
         or "z=" in normalized
+        or "z=" in _strip_latex_wrappers(message).replace(" ", "").lower()
         or _extract_implicit3d_equation(message) is not None
     )
 
 
 def _needs_retrieval(message: str, question_type: QuestionType) -> bool:
-    if question_type in {QuestionType.OFF_TOPIC, QuestionType.UNKNOWN, QuestionType.VISUALIZATION}:
+    normalized = _compact(message)
+    material_reference = any(token in message or token in normalized for token in MATERIAL_REFERENCE_TOKENS)
+    course_topic = any(token in message or token in normalized for token in COURSE_TOPIC_TOKENS)
+    if material_reference and question_type not in {QuestionType.OFF_TOPIC, QuestionType.VISUALIZATION}:
+        return True
+    if question_type in {QuestionType.OFF_TOPIC, QuestionType.VISUALIZATION}:
         return False
+    if question_type == QuestionType.UNKNOWN:
+        return material_reference or course_topic
     if any(token in message for token in SOURCE_TOKENS):
+        return True
+    if course_topic and question_type in {QuestionType.CONCEPTUAL, QuestionType.COMPUTATIONAL, QuestionType.PROOF, QuestionType.MIXED}:
         return True
     return question_type == QuestionType.CONCEPTUAL
 
@@ -370,10 +441,22 @@ def _extract_implicit3d_equation(message: str) -> str | None:
     for candidate in candidates:
         candidate = _trim_equation_prefix(candidate)
         compact = candidate.replace(" ", "").lower()
+        if _is_integral_or_assignment_equation(candidate, compact):
+            continue
         if re.match(r"^[z]\s*=", candidate.strip(), flags=re.IGNORECASE):
             continue
         if all(variable in compact for variable in ["x", "y", "z"]):
-            return _clean_expression(candidate)
+            cleaned = _clean_expression(candidate)
+            if cleaned and _valid_plot_suggestion(
+                PlotSuggestion(
+                    plot_type=PlotType.IMPLICIT3D,
+                    expression=cleaned,
+                    variables=["x", "y", "z"],
+                    ranges={"x": (-1.5, 1.5), "y": (-1.5, 1.5), "z": (-1.5, 1.5)},
+                    source="agent",
+                )
+            ):
+                return cleaned
     return None
 
 
@@ -388,6 +471,14 @@ def _trim_equation_prefix(candidate: str) -> str:
         start = min(found_positions)
         candidate = candidate[start:]
     return candidate.strip()
+
+
+def _is_integral_or_assignment_equation(candidate: str, compact: str) -> bool:
+    left = candidate.split("=", 1)[0].strip().lower()
+    integral_markers = ["\\int", "\\iint", "\\iiint", "int_", "iint_", "iiint_", "mathrm(d", "mathrmd"]
+    if any(marker in compact for marker in integral_markers):
+        return True
+    return left in {"i", "s"} or left.startswith(("i ", "s "))
 
 
 def _looks_like_region2d(message: str) -> bool:
@@ -410,7 +501,7 @@ def _looks_like_space_request(message: str, normalized: str) -> bool:
 
 def _looks_like_upper_hemisphere(message: str, normalized: str) -> bool:
     return (
-        ("上半球" in message or "涓婂崐鐞?" in message or "hemisphere" in normalized)
+        ("上半球" in message or "半球面" in message or "涓婂崐鐞?" in message or "hemisphere" in normalized)
         and _looks_like_space_request(message, normalized)
     )
 
@@ -425,7 +516,7 @@ def _extract_region_expression(message: str) -> str:
 def _extract_expression_after_equals(message: str) -> str | None:
     cleaned = _strip_latex_wrappers(message).replace("＝", "=")
     patterns = [
-        r"z\s*=\s*([^,，。；;\n]+)",
+        r"z\s*=\s*([^，。；;\n]+)",
         r"y\s*=\s*([^,，。；;\n]+)",
         r"f\s*\(\s*x\s*\)\s*=\s*([^,，。；;\n]+)",
     ]
@@ -434,6 +525,24 @@ def _extract_expression_after_equals(message: str) -> str | None:
         if match:
             return _clean_expression(match.group(1))
     return None
+
+
+def _valid_plot_suggestion(suggestion: PlotSuggestion | None) -> PlotSuggestion | None:
+    if suggestion is None:
+        return None
+    try:
+        validate_plot_request(
+            PlotPreviewRequest(
+                plot_type=suggestion.plot_type,
+                expression=suggestion.expression,
+                variables=suggestion.variables,
+                ranges=suggestion.ranges,
+                source=suggestion.source,
+            )
+        )
+    except PlotValidationError:
+        return None
+    return suggestion
 
 
 def _strip_latex_wrappers(value: str) -> str:

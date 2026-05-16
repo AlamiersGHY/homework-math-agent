@@ -107,6 +107,23 @@ def test_plot_preview_surface3d_normalizes_latex_expression() -> None:
     assert payload["spec"]["layout"]["title"]["text"] == "z = sqrt(1-x^(2)-y^(2))"
 
 
+def test_plot_preview_rejects_truncated_latex_sqrt() -> None:
+    client = TestClient(app)
+
+    response = client.post(
+        "/plots/preview",
+        json={
+            "plot_type": "surface3d",
+            "expression": r"\sqrt{1",
+            "variables": ["x", "y"],
+            "ranges": {"x": [-1, 1], "y": [-1, 1]},
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "plot_validation_error"
+
+
 def test_plot_preview_implicit3d_returns_plotly_isosurface() -> None:
     client = TestClient(app)
 

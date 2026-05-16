@@ -2,6 +2,7 @@ import json
 from collections.abc import AsyncIterator
 
 from math_agent_api.db.session import SessionLocal
+from math_agent_api.db.repositories import DocumentRepository
 from math_agent_api.prompts.chat import build_chat_messages
 from math_agent_api.providers.llm import (
     LLMProvider,
@@ -153,7 +154,18 @@ async def stream_chat_with_provider(
     plot_suggestion = plan.plot_suggestion_payload()
     retrieval_attempted = False
     retrieved_sources: list[RetrievedSource] = []
-    if db is not None and plan.needs_retrieval:
+    has_ready_documents = False
+    if db is not None:
+        try:
+            has_ready_documents = DocumentRepository(db).has_ready_documents()
+        except Exception:
+            has_ready_documents = False
+    should_attempt_retrieval = plan.needs_retrieval or (
+        db is not None
+        and has_ready_documents
+        and _should_probe_retrieval(active_message, plan.question_type)
+    )
+    if db is not None and should_attempt_retrieval:
         try:
             retrieval = search_retrieval(db=db, query=active_message, top_k=5)
             retrieval_attempted = True
@@ -251,3 +263,58 @@ async def stream_chat_with_provider(
     except LLMProviderError:
         async for event in stream_chat_error_tail(getattr(provider, "name", "unknown")):
             yield event
+
+
+def _should_probe_retrieval(message: str, question_type: QuestionType) -> bool:
+    if question_type in {QuestionType.OFF_TOPIC, QuestionType.VISUALIZATION}:
+        return False
+    if request_mentions_uploaded_material(message):
+        return True
+    topic_markers = [
+        "定义",
+        "定理",
+        "法则",
+        "概念",
+        "definition",
+        "theorem",
+        "rule",
+        "concept",
+        "性质",
+        "说明",
+        "解释",
+        "explain",
+        "what is",
+        "为什么",
+        "是什么",
+        "讲了什么",
+        "核心",
+        "例题",
+        "复合函数",
+        "链式法则",
+        "求导法则",
+    ]
+    return any(marker in message for marker in topic_markers)
+
+
+def request_mentions_uploaded_material(message: str) -> bool:
+    normalized = message.lower()
+    material_markers = [
+        "pdf",
+        "课本",
+        "教材",
+        "讲义",
+        "材料",
+        "资料",
+        "课件",
+        "上传",
+        "附件",
+        "引用",
+        "来源",
+        "根据",
+        "你能看到",
+        "看得到",
+        "这份",
+        "这个",
+        "现在呢",
+    ]
+    return any(marker in message or marker in normalized for marker in material_markers)

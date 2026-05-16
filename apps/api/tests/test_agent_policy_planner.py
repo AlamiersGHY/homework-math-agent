@@ -100,6 +100,52 @@ def test_upper_hemisphere_request_produces_surface_plot_suggestion() -> None:
     assert plan.plot_suggestion.expression == "sqrt(a^2 - x^2 - y^2)"
 
 
+def test_ocr_surface_integral_uses_geometry_surface_not_integral_assignment() -> None:
+    plan = plan_agent_turn(
+        ChatStreamRequest(
+            message="请根据图片内容帮我分析这道题",
+            confirmed_ocr_text=(
+                r"计算曲面积分 $I = \iint_{\Sigma} (x - x^{3}) \mathrm{d}y\mathrm{d}z "
+                r"+ (y - y^{3}) \mathrm{d}z\mathrm{d}x + (z - z^{3}) \mathrm{d}x\mathrm{d}y$，"
+                r"其中 $\Sigma$ 是半球面 $z = \sqrt{1 - x^{2} - y^{2}}$ 的上侧。"
+            ),
+            answer_mode="direct",
+        )
+    )
+
+    assert plan.question_type == QuestionType.VISUALIZATION
+    assert plan.needs_plot is True
+    assert plan.plot_type == PlotType.SURFACE3D
+    assert plan.plot_suggestion is not None
+    assert plan.plot_suggestion.expression == r"\sqrt{1 - x^{2} - y^{2}}"
+    assert plan.plot_suggestion.ranges == {"x": (-1.0, 1.0), "y": (-1.0, 1.0)}
+
+
+def test_integral_assignment_without_surface_does_not_emit_invalid_implicit_plot() -> None:
+    plan = plan_agent_turn(
+        ChatStreamRequest(
+            message=(
+                r"这个三重积分区域想象不出来：$I=\iiint_\Omega (x+y+z)\,\mathrm{d}V$，"
+                r"请解释一下。"
+            ),
+            answer_mode="direct",
+        )
+    )
+
+    assert plan.question_type == QuestionType.VISUALIZATION
+    assert plan.needs_plot is False
+    assert plan.plot_suggestion is None
+
+
+def test_course_topic_without_explicit_source_still_prefers_retrieval() -> None:
+    plan = plan_agent_turn(
+        ChatStreamRequest(message="解释一下复合函数求导法则", answer_mode="guided")
+    )
+
+    assert plan.needs_retrieval is True
+    assert plan.retrieval_scope == "uploaded_course_materials"
+
+
 def test_chinese_spatial_surface_request_produces_surface3d() -> None:
     plan = plan_agent_turn(
         ChatStreamRequest(

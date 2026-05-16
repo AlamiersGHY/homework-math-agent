@@ -88,6 +88,23 @@ def test_retrieval_ranking_prefers_higher_overlap(isolated_database) -> None:
     assert results[0]["page_start"] == 2
 
 
+def test_material_overview_query_returns_real_uploaded_source(isolated_database) -> None:
+    client = TestClient(app)
+    _upload_pdf(
+        client,
+        "analysis-notes.pdf",
+        ["Definition. Uniform continuity means one delta controls all points in the domain."],
+    )
+
+    response = client.post("/retrieval/search", json={"query": "你能看到我上传的PDF吗", "top_k": 5})
+    results = response.json()["results"]
+
+    assert response.status_code == 200
+    assert results
+    assert results[0]["filename"] == "analysis-notes.pdf"
+    assert results[0]["page_start"] == 1
+
+
 def _upload_pdf(client: TestClient, filename: str, pages: list[str]) -> None:
     response = client.post(
         "/documents/upload",

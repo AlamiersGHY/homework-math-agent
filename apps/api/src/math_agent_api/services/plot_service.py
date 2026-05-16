@@ -53,6 +53,8 @@ def _normalize_plot_request(request: PlotPreviewRequest) -> PlotPreviewRequest:
 
 def normalize_plot_expression(expression: str) -> str:
     normalized = expression.strip()
+    if normalized.count("{") != normalized.count("}"):
+        raise PlotValidationError("Expression has incomplete LaTeX braces.")
     normalized = (
         normalized.replace("\\(", " ")
         .replace("\\)", " ")
@@ -89,16 +91,43 @@ def _replace_latex_sqrt(expression: str) -> str:
     while index >= 0:
         brace_start = expression.find("{", index + len(marker))
         if brace_start < 0:
-            index = expression.find(marker, index + len(marker))
-            continue
+            raise PlotValidationError("Expression has incomplete LaTeX square-root syntax.")
         brace_end = _find_matching_brace(expression, brace_start)
         if brace_end < 0:
-            index = expression.find(marker, index + len(marker))
-            continue
+            raise PlotValidationError("Expression has incomplete LaTeX square-root syntax.")
         inner = expression[brace_start + 1 : brace_end]
         expression = expression[:index] + f"sqrt({inner})" + expression[brace_end + 1 :]
         index = expression.find(marker, index + len(inner) + 6)
     return expression
+
+
+def validate_plot_request(request: PlotPreviewRequest) -> PlotPreviewRequest:
+    """Validate syntax without sampling a full Plotly grid."""
+    normalized_request = _normalize_plot_request(request)
+    variables = set(normalized_request.variables)
+    if normalized_request.plot_type == PlotType.FUNCTION2D:
+        if len(normalized_request.variables) != 1:
+            raise PlotValidationError("function2d requires exactly one variable.")
+        _compile_expression(normalized_request.expression, variables)
+        return normalized_request
+    if normalized_request.plot_type == PlotType.SURFACE3D:
+        if len(normalized_request.variables) != 2:
+            raise PlotValidationError("surface3d requires exactly two variables.")
+        _compile_expression(normalized_request.expression, variables)
+        return normalized_request
+    if normalized_request.plot_type == PlotType.REGION2D:
+        if len(normalized_request.variables) != 2:
+            raise PlotValidationError("region2d requires exactly two variables.")
+        return normalized_request
+    if normalized_request.plot_type == PlotType.IMPLICIT3D:
+        if len(normalized_request.variables) != 3:
+            raise PlotValidationError("implicit3d requires exactly three variables.")
+        if variables != {"x", "y", "z"}:
+            raise PlotValidationError("implicit3d supports only x, y, and z variables.")
+        expression, _level = _split_implicit_equation(normalized_request.expression)
+        _compile_expression(expression, variables)
+        return normalized_request
+    raise PlotValidationError("This plot type is not implemented in the MVP preview yet.")
 
 
 def _find_matching_brace(expression: str, start: int) -> int:
