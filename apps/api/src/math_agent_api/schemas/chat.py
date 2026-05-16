@@ -45,6 +45,7 @@ class MetadataEvent(BaseModel):
     retrieved_sources: list[RetrievedSource] = Field(default_factory=list)
     citations: list[RetrievedSource] = Field(default_factory=list)
     quick_replies: list[str] = Field(default_factory=list)
+    quick_reply_source: Literal["llm", "fallback", "pending"] = "pending"
 
 
 class DeltaEvent(BaseModel):

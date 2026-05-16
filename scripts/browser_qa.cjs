@@ -291,9 +291,21 @@ async function runDesktopFlow(browser, baseUrl, apiBaseUrl, screenshotDir) {
     Array.isArray(quickReplyPayload.attachments) && quickReplyPayload.attachments.length === 0,
     "quick reply accidentally sent composer attachments"
   );
+  await waitForText(page, /你可以继续要求我展开关键步骤|结论是|关键理由|持久化回答/, "quick reply answer did not finish");
+  await page.getByRole("button", { name: /^\u53d1\u9001$/ }).waitFor({ state: "visible", timeout: 30000 });
+  await page.getByRole("button", { name: /^直接解答$/ }).click();
+  const directChatRequestPromise = page.waitForRequest((request) => request.url().includes("/chat/stream"));
+  await composerTextarea.fill("求 lim(x->0) sin(x)/x");
+  await page.getByRole("button", { name: /^\u53d1\u9001$/ }).click();
+  const directChatRequest = await directChatRequestPromise;
+  const directPayload = JSON.parse(directChatRequest.postData() || "{}");
+  assertOk(directPayload.answer_mode === "direct", "direct-mode test did not send direct mode");
+  await page.getByRole("button", { name: /^发送追问：/ }).last().waitFor({ timeout: 30000 });
   await page.reload({ waitUntil: "networkidle" });
   await page.getByText("Math Agent").waitFor({ timeout: 15000 });
   await page.getByRole("button", { name: /soul\.md · 自定义/ }).waitFor({ timeout: 15000 });
+  await page.getByRole("button", { name: /^解释一下导数的几何意义/ }).first().click();
+  await page.getByRole("button", { name: /^发送追问：/ }).last().waitFor({ timeout: 30000 });
   await page.getByRole("button", { name: /\u65b0\u5efa/ }).first().click();
   await page.locator("article").first().waitFor({ state: "detached", timeout: 15000 }).catch(() => undefined);
 

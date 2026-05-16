@@ -1,4 +1,5 @@
 import json
+import re
 from collections.abc import AsyncIterator
 
 from math_agent_api.db.session import SessionLocal
@@ -54,6 +55,15 @@ def create_plot_suggestion(message: str, question_type: QuestionType) -> dict | 
 def format_sse(event: str, data: dict) -> str:
     payload = json.dumps(data, ensure_ascii=False)
     return f"event: {event}\ndata: {payload}\n\n"
+
+
+QUICK_REPLY_SYSTEM_PROMPT = """你是 Math Agent 的追问建议生成器。
+根据用户本轮问题和刚刚生成的回答，生成 3 个“用户下一轮可能点击发送”的追问。
+要求：
+- 必须贴合当前题目和回答内容，不能写成泛泛的“给我提示/继续讲”。
+- 优先是苏格拉底式问题、下一步检查问题、变式问题。
+- 每条 8 到 26 个汉字左右，适合按钮显示。
+- 只返回 JSON 数组，例如 ["问题一？","问题二？","问题三？"]，不要解释。"""
 
 
 async def stream_mock_chat(request: ChatStreamRequest) -> AsyncIterator[str]:
@@ -112,7 +122,6 @@ async def stream_chat_error(
     provider_name: str,
 ) -> AsyncIterator[str]:
     plot_suggestion = plan.plot_suggestion_payload()
-    quick_replies = build_quick_replies(plan, active_message_for_request(request))
     yield format_sse(
         "start",
         StartEvent(session_id=session_id, answer_mode=plan.answer_mode).model_dump(mode="json"),
@@ -124,7 +133,8 @@ async def stream_chat_error(
             should_visualize=plan.needs_plot,
             plot_suggestion=plot_suggestion,
             planner=plan,
-            quick_replies=quick_replies,
+            quick_replies=[],
+            quick_reply_source="pending",
         ).model_dump(mode="json"),
     )
     async for event in stream_chat_error_tail(provider_name):
@@ -155,7 +165,6 @@ async def stream_chat_with_provider(
     active_message = active_message_for_request(request)
     visible_user_message = _visible_message_for_persistence(request)
     plot_suggestion = plan.plot_suggestion_payload()
-    quick_replies = build_quick_replies(plan, active_message)
     retrieval_attempted = False
     retrieved_sources: list[RetrievedSource] = []
     has_ready_documents = False
@@ -229,7 +238,8 @@ async def stream_chat_with_provider(
             retrieval_attempted=retrieval_attempted,
             retrieved_sources=retrieved_sources,
             citations=retrieved_sources,
-            quick_replies=quick_replies,
+            quick_replies=[],
+            quick_reply_source="pending",
         ).model_dump(mode="json"),
     )
 
@@ -246,11 +256,32 @@ async def stream_chat_with_provider(
         async for chunk in provider.stream_chat(messages):
             answer_parts.append(chunk)
             yield format_sse("delta", DeltaEvent(text=chunk).model_dump(mode="json"))
+        answer_text = "".join(answer_parts)
+        quick_replies, quick_reply_source = await generate_quick_replies(
+            provider=provider,
+            plan=plan,
+            user_message=active_message,
+            assistant_answer=answer_text,
+        )
+        yield format_sse(
+            "metadata",
+            MetadataEvent(
+                question_type=plan.question_type,
+                should_visualize=plan.needs_plot,
+                plot_suggestion=plot_suggestion,
+                planner=plan,
+                retrieval_attempted=retrieval_attempted,
+                retrieved_sources=retrieved_sources,
+                citations=retrieved_sources,
+                quick_replies=quick_replies,
+                quick_reply_source=quick_reply_source,
+            ).model_dump(mode="json"),
+        )
         assistant_record = append_message(
             db,
             session_id=session_id,
             role="assistant",
-            content="".join(answer_parts),
+            content=answer_text,
             answer_mode=plan.answer_mode,
             question_type=plan.question_type,
             source=getattr(provider, "name", "unknown"),
@@ -271,6 +302,7 @@ async def stream_chat_with_provider(
                     ],
                     "citations": [source.model_dump(mode="json") for source in retrieved_sources],
                     "quick_replies": quick_replies,
+                    "quick_reply_source": quick_reply_source,
                     "style_config": {
                         "style": request.context.style,
                         "soul": request.context.soul,
@@ -295,6 +327,73 @@ async def stream_chat_with_provider(
     except LLMProviderError:
         async for event in stream_chat_error_tail(getattr(provider, "name", "unknown")):
             yield event
+
+
+async def generate_quick_replies(
+    provider: LLMProvider,
+    plan: AgentPolicyPlan,
+    user_message: str,
+    assistant_answer: str,
+) -> tuple[list[str], str]:
+    if not assistant_answer.strip():
+        return build_quick_replies(plan, user_message), "fallback"
+
+    prompt = (
+        f"题型: {plan.question_type.value}\n"
+        f"回答模式: {plan.answer_mode.value}\n"
+        f"用户问题:\n{user_message[:1200]}\n\n"
+        f"刚刚的回答:\n{assistant_answer[:2400]}\n\n"
+        "请返回 3 个追问建议。"
+    )
+    try:
+        chunks: list[str] = []
+        async for chunk in provider.stream_chat(
+            [
+                {"role": "system", "content": QUICK_REPLY_SYSTEM_PROMPT},
+                {"role": "user", "content": prompt},
+            ]
+        ):
+            chunks.append(chunk)
+        replies = parse_quick_reply_json("".join(chunks))
+        if replies:
+            return replies, "llm"
+    except LLMProviderError:
+        pass
+    return build_quick_replies(plan, user_message), "fallback"
+
+
+def parse_quick_reply_json(text: str) -> list[str]:
+    cleaned = text.strip()
+    if not cleaned:
+        return []
+    fenced = re.search(r"```(?:json)?\s*(.*?)```", cleaned, flags=re.DOTALL | re.IGNORECASE)
+    if fenced:
+        cleaned = fenced.group(1).strip()
+    if not cleaned.startswith("["):
+        array_match = re.search(r"\[[\s\S]*\]", cleaned)
+        if array_match:
+            cleaned = array_match.group(0)
+    try:
+        payload = json.loads(cleaned)
+    except json.JSONDecodeError:
+        return []
+    if not isinstance(payload, list):
+        return []
+    replies: list[str] = []
+    seen: set[str] = set()
+    for item in payload:
+        if not isinstance(item, str):
+            continue
+        reply = re.sub(r"\s+", " ", item).strip().strip("\"'“”")
+        if not reply or reply in seen:
+            continue
+        if len(reply) > 48:
+            reply = reply[:48].rstrip("，,；;。 ") + "？"
+        replies.append(reply)
+        seen.add(reply)
+        if len(replies) == 3:
+            break
+    return replies if len(replies) == 3 else []
 
 
 def _should_probe_retrieval(message: str, question_type: QuestionType) -> bool:
@@ -329,8 +428,6 @@ def _should_probe_retrieval(message: str, question_type: QuestionType) -> bool:
 
 
 def build_quick_replies(plan: AgentPolicyPlan, message: str = "") -> list[str]:
-    if plan.answer_mode.value != "guided":
-        return []
     normalized = message.lower()
     if plan.needs_clarification:
         return ["我应该先补充哪些条件？", "能先帮我把题意拆开吗？", "如果从最简单情形看，该看什么？"]

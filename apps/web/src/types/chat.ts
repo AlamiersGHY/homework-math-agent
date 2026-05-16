@@ -83,6 +83,7 @@ export type MetadataEventData = {
   retrieved_sources?: RetrievedSource[];
   citations?: RetrievedSource[];
   quick_replies?: string[];
+  quick_reply_source?: "llm" | "fallback" | "pending";
 };
 
 export type AgentPolicyPlan = {

@@ -17,6 +17,9 @@ class ShortProvider:
     name = "short"
 
     async def stream_chat(self, messages: Sequence[dict[str, str]]) -> AsyncIterator[str]:
+        if messages[0]["content"].startswith("你是 Math Agent 的追问建议生成器"):
+            yield "不是 JSON"
+            return
         yield "持久化回答"
 
 
@@ -162,7 +165,12 @@ async def test_chat_stream_persists_plot_suggestion_artifact(isolated_database) 
         for artifact in artifacts
     )
     chat_metadata = next(artifact for artifact in artifacts if artifact["artifact_type"] == "chat_metadata")
-    assert chat_metadata["payload"]["quick_replies"] == []
+    assert chat_metadata["payload"]["quick_replies"] == [
+        "我应该先观察图形的哪个特征？",
+        "这个图形和题目条件怎么对应？",
+        "下一步该把图形信息转成什么式子？",
+    ]
+    assert chat_metadata["payload"]["quick_reply_source"] == "fallback"
     assert any(
         artifact["artifact_type"] == "plot_suggestion"
         and artifact["message_id"] == assistant_message["id"]
@@ -234,6 +242,7 @@ async def test_chat_stream_persists_guided_quick_replies(isolated_database) -> N
         "能用夹逼定理引导我吗？",
         "如果换成 sin(3x)/x 怎么办？",
     ]
+    assert chat_metadata["payload"]["quick_reply_source"] == "fallback"
     assert chat_metadata["payload"]["style_config"] == {
         "style": "custom",
         "soul": "先讲直觉，再指出易错点。",
@@ -241,7 +250,7 @@ async def test_chat_stream_persists_guided_quick_replies(isolated_database) -> N
 
 
 @pytest.mark.asyncio
-async def test_chat_stream_persists_empty_quick_replies_for_direct_mode(isolated_database) -> None:
+async def test_chat_stream_persists_direct_mode_quick_replies(isolated_database) -> None:
     request = ChatStreamRequest(message="姹?lim(x->0) sin(x)/x", answer_mode="direct")
 
     with isolated_database.SessionLocal() as db:
@@ -262,7 +271,12 @@ async def test_chat_stream_persists_empty_quick_replies_for_direct_mode(isolated
 
     assert response.status_code == 200
     chat_metadata = next(artifact for artifact in artifacts if artifact["artifact_type"] == "chat_metadata")
-    assert chat_metadata["payload"]["quick_replies"] == []
+    assert chat_metadata["payload"]["quick_replies"] == [
+        "第一步为什么要想到标准极限？",
+        "能用夹逼定理引导我吗？",
+        "如果换成 sin(3x)/x 怎么办？",
+    ]
+    assert chat_metadata["payload"]["quick_reply_source"] == "fallback"
 
 
 def test_unknown_session_returns_404(isolated_database) -> None:

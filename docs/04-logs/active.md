@@ -219,6 +219,12 @@ Continue from the verified PDF RAG, citation, attachment UX, and automatic plot 
 - Browser QA now asserts that suggestions appear near the composer, do not render inside assistant bubbles, send the selected suggestion as a normal guided chat message, and do not include pending composer attachments.
 - `.\scripts\check.ps1` passed on 2026-05-16 19:59 +08 after the follow-up suggestion polish: 83 backend tests, 18 deterministic evals, frontend typecheck, math-rendering normalization tests, and frontend production build completed.
 - `.\scripts\browser-qa.ps1` passed on 2026-05-16 19:58 +08; browser QA screenshots are under `.cache/qa/20260516-195741`.
+- User feedback on 2026-05-16 identified the deeper follow-up issue: the previous `quick_replies` were deterministic template fields rather than backend LLM-generated suggestions based on the current answer.
+- Chat streaming now emits `quick_replies=[]` with `quick_reply_source="pending"` in the initial metadata, then after the assistant answer finishes it calls the active LLM provider with the user question and assistant answer to generate 3 follow-up suggestions. If that generation is unavailable or invalid JSON, it records deterministic `quick_reply_source="fallback"` suggestions.
+- `quick_replies` are no longer limited to guided mode; direct, guided, and hint turns can all return follow-up suggestions. Frontend history restore keeps displaying persisted suggestions, and frontend fallback generation remains only for older sessions without stored metadata.
+- Browser QA now covers direct-mode follow-up suggestions, refresh/reopen history replay of suggestions, and composer-adjacent display without assistant-bubble duplicate controls.
+- `.\scripts\check.ps1` passed on 2026-05-16 20:45 +08 after the LLM-generated follow-up metadata unit: 86 backend tests, 18 deterministic evals, frontend typecheck, math-rendering normalization tests, and frontend production build completed.
+- `.\scripts\browser-qa.ps1` passed on 2026-05-16 20:43 +08; browser QA screenshots are under `.cache/qa/20260516-204329`.
 
 ## Next Tasks
 
@@ -263,7 +269,7 @@ Continue from the verified PDF RAG, citation, attachment UX, and automatic plot 
 - The UI must remain chat-first and must not become a manual tool workbench.
 - User-facing UI should show learning state and next actions, not raw provider/session/debug internals.
 - Global style preference remains local-only in the demo; do not add account semantics or cross-device sync without a new decision record.
-- Guided mode should expose composer-adjacent, contextual next-step suggestions after assistant answers, and quick replies must send as normal chat messages without accidentally including pending composer attachments.
+- Direct, guided, and hint modes should expose composer-adjacent, contextual next-step suggestions after assistant answers; backend should prefer LLM-generated suggestions and mark fallback suggestions with `quick_reply_source="fallback"`. Quick replies must send as normal chat messages without accidentally including pending composer attachments.
 - Before finalizing a coding task, run the relevant app-local tests or explain what could not be verified.
 - Release validation should use `.\scripts\release-check.ps1`; pass `-LiveLLM` only when real LLM credentials are locally configured.
 - After completing a coherent deliverable unit, create a local Git checkpoint commit unless blocked by unrelated changes or explicit user instruction.

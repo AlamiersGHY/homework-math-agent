@@ -13,7 +13,7 @@ from math_agent_api.prompts.chat import build_chat_messages
 from math_agent_api.providers.llm import LLMProviderError
 from math_agent_api.schemas.chat import ChatContext, ChatStreamRequest
 from math_agent_api.schemas.common import AnswerMode, QuestionType
-from math_agent_api.services.chat_service import stream_chat_with_provider
+from math_agent_api.services.chat_service import parse_quick_reply_json, stream_chat_with_provider
 from math_agent_api.services.document_service import ingest_pdf_document
 
 
@@ -43,16 +43,20 @@ def test_chat_stream_returns_sse_events() -> None:
     assert "event: done" in body
     assert '"question_type": "computational"' in body
     metadata = _first_event_data(body, "metadata")
+    final_metadata = _last_event_data(body, "metadata")
     assert metadata["question_type"] == "computational"
     assert metadata["should_visualize"] is False
     assert metadata["planner"]["question_type"] == metadata["question_type"]
     assert metadata["planner"]["needs_plot"] == metadata["should_visualize"]
     assert metadata["planner"]["needs_retrieval"] is False
-    assert metadata["quick_replies"] == [
+    assert metadata["quick_replies"] == []
+    assert metadata["quick_reply_source"] == "pending"
+    assert final_metadata["quick_replies"] == [
         "第一步为什么要想到标准极限？",
         "能用夹逼定理引导我吗？",
         "如果换成 sin(3x)/x 怎么办？",
     ]
+    assert final_metadata["quick_reply_source"] in {"llm", "fallback"}
 
 
 def test_chat_context_accepts_bounded_style_and_soul() -> None:
@@ -164,11 +168,13 @@ async def test_chat_stream_probes_uploaded_material_for_course_topic(isolated_da
         ]
 
     metadata = _first_event_data("".join(events), "metadata")
+    final_metadata = _last_event_data("".join(events), "metadata")
 
     assert metadata["retrieval_attempted"] is True
     assert metadata["retrieved_sources"]
     assert metadata["citations"][0]["filename"] == "chain-rule-notes.pdf"
-    assert metadata["quick_replies"] == [
+    assert metadata["quick_replies"] == []
+    assert final_metadata["quick_replies"] == [
         "导数为什么等于切线斜率？",
         "这个几何意义和极限怎么连起来？",
         "能用一个具体曲线说明吗？",
@@ -203,7 +209,7 @@ async def test_chat_stream_uses_latest_material_overview_for_this_pdf_question(i
             )
         ]
 
-    metadata = _first_event_data("".join(events), "metadata")
+    metadata = _last_event_data("".join(events), "metadata")
 
     assert metadata["retrieval_attempted"] is True
     assert metadata["retrieved_sources"]
@@ -227,7 +233,7 @@ async def test_chat_stream_does_not_fabricate_sources_when_retrieval_is_empty(is
             )
         ]
 
-    metadata = _first_event_data("".join(events), "metadata")
+    metadata = _last_event_data("".join(events), "metadata")
 
     assert metadata["planner"]["needs_retrieval"] is True
     assert metadata["retrieval_attempted"] is True
@@ -236,7 +242,7 @@ async def test_chat_stream_does_not_fabricate_sources_when_retrieval_is_empty(is
 
 
 @pytest.mark.asyncio
-async def test_chat_stream_direct_mode_has_empty_quick_replies() -> None:
+async def test_chat_stream_direct_mode_has_contextual_quick_replies() -> None:
     events = [
         event
         async for event in stream_chat_with_provider(
@@ -250,9 +256,14 @@ async def test_chat_stream_direct_mode_has_empty_quick_replies() -> None:
         )
     ]
 
-    metadata = _first_event_data("".join(events), "metadata")
+    metadata = _last_event_data("".join(events), "metadata")
 
-    assert metadata["quick_replies"] == []
+    assert metadata["quick_replies"] == [
+        "第一步为什么要想到标准极限？",
+        "能用夹逼定理引导我吗？",
+        "如果换成 sin(3x)/x 怎么办？",
+    ]
+    assert metadata["quick_reply_source"] == "fallback"
 
 
 def test_guided_quick_replies_are_contextual_socratic_questions() -> None:
@@ -265,7 +276,7 @@ def test_guided_quick_replies_are_contextual_socratic_questions() -> None:
     ) as response:
         body = response.read().decode("utf-8")
 
-    metadata = _first_event_data(body, "metadata")
+    metadata = _last_event_data(body, "metadata")
 
     assert metadata["quick_replies"] == [
         "导数为什么等于切线斜率？",
@@ -273,6 +284,25 @@ def test_guided_quick_replies_are_contextual_socratic_questions() -> None:
         "能用一个具体曲线说明吗？",
     ]
     assert all(reply.endswith(("？", "。")) for reply in metadata["quick_replies"])
+
+
+def test_hint_mode_also_returns_follow_up_suggestions() -> None:
+    client = TestClient(app)
+
+    with client.stream(
+        "POST",
+        "/chat/stream",
+        json={"message": "证明单调有界数列必有极限", "answer_mode": "hint"},
+    ) as response:
+        body = response.read().decode("utf-8")
+
+    metadata = _last_event_data(body, "metadata")
+
+    assert metadata["quick_replies"] == [
+        "我应该先取哪个上确界？",
+        "为什么单调性可以推出收敛？",
+        "我能试着写 ε 证明吗？",
+    ]
 
 
 def test_chat_stream_includes_plot_suggestion_for_visualization_question() -> None:
@@ -406,6 +436,54 @@ class FakeProvider:
         yield "第二段"
 
 
+class FollowUpProvider:
+    name = "follow-up"
+
+    async def stream_chat(self, messages: Sequence[dict[str, str]]) -> AsyncIterator[str]:
+        if messages[0]["content"].startswith("你是 Math Agent 的追问建议生成器"):
+            yield '["这一步为什么成立？","还有没有反例？","下一步我该验证什么？"]'
+            return
+        yield "先说明核心思路，再让学生自己补下一步。"
+
+
+@pytest.mark.asyncio
+async def test_chat_stream_emits_llm_generated_quick_replies_after_answer() -> None:
+    events = [
+        event
+        async for event in stream_chat_with_provider(
+            request=ChatStreamRequest(
+                message="解释一下导数的几何意义",
+                answer_mode=AnswerMode.DIRECT,
+            ),
+            session_id="session-llm-quick-replies",
+            question_type=QuestionType.CONCEPTUAL,
+            provider=FollowUpProvider(),
+        )
+    ]
+
+    body = "".join(events)
+    first_metadata = _first_event_data(body, "metadata")
+    final_metadata = _last_event_data(body, "metadata")
+
+    assert first_metadata["quick_replies"] == []
+    assert first_metadata["quick_reply_source"] == "pending"
+    assert final_metadata["quick_replies"] == [
+        "这一步为什么成立？",
+        "还有没有反例？",
+        "下一步我该验证什么？",
+    ]
+    assert final_metadata["quick_reply_source"] == "llm"
+    assert body.index('"text": "先说明核心思路') < body.rindex('"quick_reply_source": "llm"')
+
+
+def test_parse_quick_reply_json_accepts_fenced_json() -> None:
+    assert parse_quick_reply_json('```json\n["一？", "二？", "三？"]\n```') == [
+        "一？",
+        "二？",
+        "三？",
+    ]
+
+
 @pytest.mark.asyncio
 async def test_chat_service_maps_provider_chunks_to_sse_delta_events() -> None:
     request = ChatStreamRequest(message="求 lim(x->0) sin(x)/x", answer_mode="direct")
@@ -460,6 +538,17 @@ async def test_chat_service_maps_provider_failure_to_sse_error_event() -> None:
 def _first_event_data(body: str, event_name: str) -> dict:
     event_marker = f"event: {event_name}"
     for block in body.split("\n\n"):
+        if event_marker not in block:
+            continue
+        for line in block.splitlines():
+            if line.startswith("data:"):
+                return json.loads(line.removeprefix("data:").strip())
+    raise AssertionError(f"event {event_name} not found")
+
+
+def _last_event_data(body: str, event_name: str) -> dict:
+    event_marker = f"event: {event_name}"
+    for block in reversed(body.split("\n\n")):
         if event_marker not in block:
             continue
         for line in block.splitlines():

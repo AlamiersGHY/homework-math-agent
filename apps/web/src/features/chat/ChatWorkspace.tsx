@@ -531,6 +531,19 @@ export function ChatWorkspace() {
                 )
               );
             }
+            const nextQuickReplies = toQuickReplies(data.quick_replies);
+            if (nextQuickReplies.length > 0) {
+              setMessages((current) =>
+                current.map((item) =>
+                  item.id === assistantId
+                    ? {
+                        ...item,
+                        quickReplies: nextQuickReplies
+                      }
+                    : item
+                )
+              );
+            }
           },
           onDelta: (data) => {
             setMessages((current) =>
@@ -2209,6 +2222,7 @@ type StoredChatMetadata = {
   retrieved_sources?: RetrievedSource[];
   citations?: RetrievedSource[];
   quick_replies?: string[];
+  quick_reply_source?: "llm" | "fallback" | "pending";
 };
 
 function buildChatMetadataLookup(
@@ -2349,7 +2363,10 @@ function normalizeStoredChatMetadata(payload: Record<string, unknown>): StoredCh
       typeof payload.retrieval_attempted === "boolean" ? payload.retrieval_attempted : undefined,
     retrieved_sources: retrievedSources,
     citations,
-    quick_replies: toQuickReplies(payload.quick_replies)
+    quick_replies: toQuickReplies(payload.quick_replies),
+    quick_reply_source: isQuickReplySource(payload.quick_reply_source)
+      ? payload.quick_reply_source
+      : undefined
   };
   if (
     metadata.question_type ||
@@ -2358,11 +2375,16 @@ function normalizeStoredChatMetadata(payload: Record<string, unknown>): StoredCh
     metadata.retrieval_attempted !== undefined ||
     retrievedSources.length > 0 ||
     citations.length > 0 ||
-    (metadata.quick_replies?.length ?? 0) > 0
+    (metadata.quick_replies?.length ?? 0) > 0 ||
+    metadata.quick_reply_source
   ) {
     return metadata;
   }
   return null;
+}
+
+function isQuickReplySource(value: unknown): value is "llm" | "fallback" | "pending" {
+  return value === "llm" || value === "fallback" || value === "pending";
 }
 
 function isPlotPreviewResponse(value: unknown): value is PlotPreviewResponse {
@@ -2421,15 +2443,68 @@ function toQuickReplies(value: unknown): string[] {
 }
 
 function getLatestQuickReplies(messages: ChatMessage[]): string[] {
-  for (const message of [...messages].reverse()) {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index];
     if (message.role === "user") {
       return [];
     }
-    if (message.role === "assistant" && message.status === "done") {
-      return toQuickReplies(message.quickReplies);
+    if (message.role === "assistant") {
+      const storedReplies = toQuickReplies(message.quickReplies);
+      if (storedReplies.length > 0) {
+        return storedReplies;
+      }
+      if (message.status !== "done") {
+        continue;
+      }
+      const previousUserMessage = findPreviousUserMessage(messages, index);
+      return buildFallbackQuickReplies(message, previousUserMessage);
     }
   }
   return [];
+}
+
+function findPreviousUserMessage(messages: ChatMessage[], beforeIndex: number): ChatMessage | null {
+  for (let index = beforeIndex - 1; index >= 0; index -= 1) {
+    const message = messages[index];
+    if (message.role === "user") {
+      return message;
+    }
+  }
+  return null;
+}
+
+function buildFallbackQuickReplies(
+  assistantMessage: ChatMessage,
+  userMessage: ChatMessage | null
+): string[] {
+  const rawText = `${userMessage?.content ?? ""}\n${assistantMessage.content}`;
+  const normalizedText = rawText.toLowerCase();
+  if (
+    assistantMessage.plot ||
+    assistantMessage.plotSuggestion ||
+    /图形|图像|曲面|三维|空间|plot|surface/.test(normalizedText)
+  ) {
+    return ["我应该先观察图形的哪个特征？", "这个图形和题目条件怎么对应？", "下一步该把图形信息转成什么式子？"];
+  }
+  if (/单调|有界|上确界|sup/.test(rawText)) {
+    return ["我应该先取哪个上确界？", "为什么单调性可以推出收敛？", "我能试着写 ε 证明吗？"];
+  }
+  if (/导数|derivative|chain rule|链式法则/.test(normalizedText)) {
+    return ["导数为什么等于切线斜率？", "这个几何意义和极限怎么连起来？", "能用一个具体曲线说明吗？"];
+  }
+  if (/lim|极限|sin\(x\)\/x/.test(normalizedText)) {
+    return ["第一步为什么要想到标准极限？", "能用夹逼定理引导我吗？", "如果换成 sin(3x)/x 怎么办？"];
+  }
+  if (/积分|integral/.test(normalizedText)) {
+    return ["我应该先画出积分区域吗？", "积分次序能不能交换？", "下一步变量范围怎么确定？"];
+  }
+  if (assistantMessage.questionType === "proof") {
+    return ["第一步应该先构造什么对象？", "这里最关键的定理是哪一个？", "我这样补下一步是否可行？"];
+  }
+  if (assistantMessage.questionType === "conceptual") {
+    return ["这个概念最容易混淆的点是什么？", "能用一个反例帮我区分吗？", "我该怎样判断题目在考它？"];
+  }
+  return ["第一步应该观察哪个结构？", "我应该尝试哪种方法？", "如果我卡住了，下一问该问什么？"];
 }
 
 function revokeMessageAttachmentUrls(messages: ChatMessage[]) {

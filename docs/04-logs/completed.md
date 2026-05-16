@@ -310,3 +310,13 @@
 - Updated the chat SSE contract note to require contextual, next-user-turn style `quick_replies`.
 - Extended browser QA to assert composer placement, no assistant-bubble duplicate controls, selected reply payload, guided mode, and empty attachments.
 - Verified `.\scripts\check.ps1` on 2026-05-16 19:59 +08 and `.\scripts\browser-qa.ps1` on 2026-05-16 19:58 +08; browser QA screenshots are under `.cache/qa/20260516-195741`.
+
+## LLM-Generated Follow-Up Suggestions
+
+- Changed chat streaming so initial metadata reports follow-up suggestions as `pending`, then the backend asks the active LLM provider to generate 3 follow-up suggestions from the current user question and completed assistant answer.
+- Added `quick_reply_source` to distinguish `llm`, `fallback`, and `pending`; fallback suggestions remain deterministic only when the follow-up generation call fails or returns invalid JSON.
+- Made follow-up suggestions available for direct, guided, and hint modes instead of guided-only.
+- Kept the frontend composer-adjacent suggestion bar, added history fallback for older sessions with no persisted suggestions, and ensured persisted suggestions restore after page reload and re-opening the session.
+- Extended backend tests for LLM-generated suggestion metadata, JSON-fence parsing, direct/hint suggestions, and persisted fallback source.
+- Extended browser QA for direct-mode suggestions and refresh/history replay of the suggestion bar.
+- Verified `.\scripts\check.ps1` on 2026-05-16 20:45 +08 and `.\scripts\browser-qa.ps1` on 2026-05-16 20:43 +08; browser QA screenshots are under `.cache/qa/20260516-204329`.
