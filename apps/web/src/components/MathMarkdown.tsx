@@ -17,7 +17,7 @@ export function MathMarkdown({
   return (
     <div className={inverted ? "math-markdown math-markdown-inverted" : "math-markdown"}>
       <ReactMarkdown
-        rehypePlugins={[rehypeKatex]}
+        rehypePlugins={[[rehypeKatex, { strict: false, throwOnError: false }]]}
         remarkPlugins={[remarkMath]}
         components={{
           a: ({ children: linkChildren, ...props }) => (

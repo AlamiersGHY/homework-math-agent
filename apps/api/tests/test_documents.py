@@ -1,6 +1,7 @@
 from fastapi.testclient import TestClient
 import fitz
 import pytest
+import sqlite3
 
 from math_agent_api.core.config import get_settings
 from math_agent_api.db.session import Base
@@ -52,6 +53,57 @@ def test_upload_pdf_extracts_chunks_and_lists_document(isolated_database) -> Non
     assert listed.status_code == 200
     assert listed.json()[0]["id"] == payload["document"]["id"]
     assert listed.json()[0]["chunk_count"] == 2
+
+
+def test_init_db_upgrades_legacy_documents_schema(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
+    from math_agent_api.db import session as db_session
+
+    database_path = tmp_path / "legacy.db"
+    with sqlite3.connect(database_path) as connection:
+        connection.execute(
+            """
+            CREATE TABLE documents (
+                id VARCHAR(80) NOT NULL PRIMARY KEY,
+                filename VARCHAR(240) NOT NULL,
+                content_type VARCHAR(120) NOT NULL,
+                file_hash VARCHAR(80) NOT NULL,
+                status VARCHAR(30) NOT NULL,
+                page_count INTEGER,
+                error_message TEXT,
+                created_at DATETIME NOT NULL,
+                updated_at DATETIME NOT NULL
+            )
+            """
+        )
+        connection.execute(
+            """
+            INSERT INTO documents (
+                id, filename, content_type, file_hash, status, page_count,
+                error_message, created_at, updated_at
+            )
+            VALUES (
+                'doc-legacy', 'legacy.pdf', 'application/pdf', 'hash', 'ready',
+                1, NULL, '2026-05-16T00:00:00', '2026-05-16T00:00:00'
+            )
+            """
+        )
+
+    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{database_path}")
+    get_settings.cache_clear()
+    db_session.engine.dispose()
+    db_session.engine = db_session._create_engine()
+    db_session.SessionLocal.configure(bind=db_session.engine)
+
+    db_session.init_db()
+
+    with sqlite3.connect(database_path) as connection:
+        columns = [row[1] for row in connection.execute("PRAGMA table_info(documents)")]
+        warning_value = connection.execute(
+            "SELECT warnings_json FROM documents WHERE id='doc-legacy'"
+        ).fetchone()[0]
+
+    assert "warnings_json" in columns
+    assert warning_value == "[]"
 
 
 def test_upload_rejects_non_pdf(isolated_database) -> None:

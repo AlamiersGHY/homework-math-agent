@@ -235,3 +235,13 @@
 - Allowed the plot service to evaluate the bounded demo parameter `a=1.0` for generated hemisphere surfaces while keeping unsupported names rejected.
 - Improved frontend API connection diagnostics so PDF material/RAG failures point users to restarting Next after `NEXT_PUBLIC_API_BASE_URL` changes and to using `.\scripts\dev.ps1`.
 - Verified `.\scripts\release-check.ps1` on 2026-05-15 23:53 +08: 55 backend tests passed, deterministic evals passed, frontend typecheck/build passed, mock API smoke including PDF RAG passed, browser QA passed with screenshots under `.cache/qa/20260515-235325`, and dependency audit advisory remained tracked under TD-005.
+
+## Robust Formula Rendering, RAG Schema Repair, And Visualization Planner Hardening
+
+- Replaced the frontend math normalizer with a scanner-style Markdown/LaTeX normalization pass that protects code spans/fences, repairs mixed `$...$$` output, normalizes doubled LaTeX commands, wraps high-confidence bare formulas, and avoids false positives such as money-like dollar text.
+- Added `npm run test:math` and wired it into `.\scripts\check.ps1` so formula rendering regressions are checked before frontend build and browser QA.
+- Fixed the user's direct local PDF/RAG failure by adding a lightweight SQLite schema repair in `init_db()` for existing demo databases missing `documents.warnings_json`; this preserves local history instead of requiring manual DB deletion.
+- Hardened the Agent prompt and planner around product capabilities: supported plot suggestions now tell the LLM the UI can generate previews, spatial-intuition requests trigger 3D when equations are available, previous-turn equations can be reused, and underspecified geometry asks for clarification without defaulting to `sin(x)/x`.
+- Added plot expression normalization for common LaTeX/natural input forms, including root/power syntax, full-width equals, `z=` prefixes, simple implicit multiplication, and implicit equations with variables on the right side while retaining unsafe-expression rejection.
+- Fixed local dev orchestration so `scripts/dev.ps1` calls `npm run dev:web-only`, avoiding recursive `npm run dev` when launched from `apps/web`; documented the new web-only and math-test commands.
+- Verified `.\scripts\release-check.ps1` on 2026-05-16 12:22 +08: 64 backend tests passed, 18 deterministic evals passed, frontend typecheck passed, `npm run test:math` passed, frontend build passed, mock API smoke including PDF RAG passed, browser QA passed with screenshots under `.cache/qa/20260516-122246`, and dependency audit advisory remained tracked under TD-005.

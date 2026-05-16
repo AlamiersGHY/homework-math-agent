@@ -35,9 +35,11 @@ async function assertMathRendered(page, label) {
   await page.waitForFunction(() => document.querySelectorAll(".katex").length > 0, { timeout: 30000 });
   const katexCount = await page.locator(".katex").count();
   assertOk(katexCount > 0, `${label}: no KaTeX formulas rendered`);
+  assertOk((await page.locator(".katex-error").count()) === 0, `${label}: KaTeX parse errors rendered`);
   const bodyText = await page.locator("body").innerText();
   assertOk(!bodyText.includes("\\frac{\\partial"), `${label}: raw partial derivative LaTeX leaked`);
   assertOk(!bodyText.includes("\\iiint"), `${label}: raw triple-integral LaTeX leaked`);
+  assertOk(!bodyText.includes("$ 定义"), `${label}: mixed dollar delimiter leaked into visible text`);
 }
 
 function attachRuntimeErrorGuards(page, label) {

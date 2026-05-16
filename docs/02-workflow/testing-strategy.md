@@ -95,7 +95,7 @@ Evals 存放在 `evals/`，不替代 unit/API tests。
 
 - `.\scripts\test.ps1`：后端 pytest。
 - `.\scripts\eval.ps1`：确定性 Agent / 可视化 eval。
-- `.\scripts\check.ps1`：后端测试、eval、前端 typecheck 和 build。
+- `.\scripts\check.ps1`：后端测试、eval、前端 typecheck、公式渲染 normalization 回归测试和 build。
 - `.\scripts\browser-qa.ps1`：生产构建下的桌面 / 移动端浏览器 QA，默认使用 mock LLM/OCR 和临时 SQLite。
 - `.\scripts\release-check.ps1`：完整本地交付检查，包含 `check`、mock API smoke、浏览器 QA 和依赖审计提示。
 - `.\scripts\release-check.ps1 -LiveLLM`：在本地真实 LLM 配置存在时额外运行 OpenAI-compatible provider smoke。

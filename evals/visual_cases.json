@@ -109,5 +109,71 @@
       "fallback to sin(x*y) or surface3d"
     ],
     "notes": "This is the minimum supported implicit3d surface case."
+  },
+  {
+    "id": "visual-006",
+    "title": "Chinese visual-intuition request for explicit 3D surface",
+    "input": {
+      "message": "这个几何曲面想象不出来：z = x^2 - y^2，帮我看空间图形",
+      "expression": "x^2 - y^2"
+    },
+    "expected": {
+      "should_visualize": true,
+      "plot_type": "surface3d",
+      "variables": ["x", "y"],
+      "renderer": "plotly"
+    },
+    "must": [
+      "recognize visual-intuition wording",
+      "produce a surface3d plot suggestion"
+    ],
+    "must_not": [
+      "say the system cannot render plots",
+      "fallback to a default sin expression"
+    ],
+    "notes": "The Agent should know the product can auto-render supported surfaces."
+  },
+  {
+    "id": "visual-007",
+    "title": "Chinese spatial request for implicit 3D equation",
+    "input": {
+      "message": "这个空间图形想象不出来：x^2 + y^2 + z^2 = 1",
+      "expression": "x^2 + y^2 + z^2 = 1"
+    },
+    "expected": {
+      "should_visualize": true,
+      "plot_type": "implicit3d",
+      "variables": ["x", "y", "z"],
+      "renderer": "plotly"
+    },
+    "must": [
+      "recognize the implicit equation as a 3D surface",
+      "preserve the equation"
+    ],
+    "must_not": [
+      "choose function2d",
+      "fallback to sin(x)/x"
+    ],
+    "notes": "Spatial language plus x/y/z equation should trigger implicit3d."
+  },
+  {
+    "id": "visual-008",
+    "title": "Spatial request without an expression asks for clarification",
+    "input": {
+      "message": "这个几何曲面想象不出来",
+      "expression": null
+    },
+    "expected": {
+      "should_visualize": false,
+      "plot_type": null
+    },
+    "must": [
+      "ask for the concrete equation or region"
+    ],
+    "must_not": [
+      "fallback to sin(x)/x",
+      "invent an unrelated surface"
+    ],
+    "notes": "The planner should avoid fake plots when the object is missing."
   }
 ]

@@ -1,14 +1,14 @@
 from math_agent_api.schemas.chat import ChatStreamRequest
-from math_agent_api.schemas.common import AnswerMode, QuestionType
+from math_agent_api.schemas.common import AnswerMode, PlotType, QuestionType
 from math_agent_api.schemas.retrieval import RetrievedSource
 
 
 def _mode_instruction(answer_mode: AnswerMode) -> str:
     if answer_mode == AnswerMode.DIRECT:
-        return "用户选择 direct：先给明确答案，再用必要步骤解释，不要强制苏格拉底式追问。"
+        return "用户选择 direct：先给明确结论，再用必要步骤解释；不要强行苏格拉底式追问。"
     if answer_mode == AnswerMode.HINT:
         return "用户选择 hint：只给关键提示和下一步方向，避免直接给完整答案。"
-    return "用户选择 guided：分步引导，先指出思路和下一步，不要一次性写成长篇完整解答。"
+    return "用户选择 guided：分步引导，先指出思路和下一步；不要一次性写成长篇完整解答。"
 
 
 def build_chat_messages(
@@ -16,6 +16,8 @@ def build_chat_messages(
     question_type: QuestionType,
     answer_mode: AnswerMode | None = None,
     retrieved_sources: list[RetrievedSource] | None = None,
+    plot_suggestion: dict | None = None,
+    needs_clarification: bool = False,
 ) -> list[dict[str, str]]:
     problem = request.confirmed_ocr_text or request.message
     resolved_mode = answer_mode or request.answer_mode
@@ -24,13 +26,14 @@ def build_chat_messages(
             "你是一个面向工科本科数学分析学习者的学习 Agent。",
             "你的目标不是泛泛聊天，而是帮助用户理解数学分析中的概念、计算、证明和可视化问题。",
             _mode_instruction(resolved_mode),
-            f"后端初步识别题型为 {question_type.value}，你可以参考但不要机械服从。",
+            f"后端 planner 初步识别题型为 {question_type.value}；你可以参考，但不要机械服从。",
             "数学表达必须使用 Markdown + LaTeX：行内公式一律写成 `$...$`，独立公式一律写成 `$$...$$`。",
             "不要输出裸露的 `\\frac`、`\\lim`、`\\sin` 等 LaTeX 命令；不要用 `[ ... ]` 包公式。",
             "三角函数和变量之间要留清楚边界，例如写 `$\\sin x$`、`$\\frac{\\sin x}{x}$`，不要写成 `sinxsinx`。",
-            "如果没有检索上下文，不要编造教材页码、定理编号或资料来源。",
-            "如果提供了检索材料，只能依据材料块中给出的 source_index、filename、pages 和 section 生成来源说明。",
-            "如果题目需要图形理解，可以在文字中提示可视化价值，但不要假装已经渲染出图。",
+            "输出前自查：不要混用 `$...$$`，不要在数学模式里再放 `$`，不要留下未闭合公式 delimiter。",
+            "如果没有检索上下文，不要编造教材页码、定理编号、章节或资料来源。",
+            "如果提供了检索材料，只能依据材料块中的 source_index、filename、pages 和 section 生成来源说明。",
+            _plot_instruction(plot_suggestion, needs_clarification),
         ]
     )
 
@@ -50,6 +53,26 @@ def build_chat_messages(
 
     messages.append({"role": "user", "content": problem})
     return messages
+
+
+def _plot_instruction(plot_suggestion: dict | None, needs_clarification: bool) -> str:
+    if plot_suggestion:
+        plot_type = plot_suggestion.get("plot_type")
+        expression = plot_suggestion.get("expression", "")
+        if plot_type in {PlotType.SURFACE3D.value, PlotType.IMPLICIT3D.value}:
+            return (
+                "本产品具备后端规划和前端自动 3D 预览能力；本轮 planner 已规划 "
+                f"{plot_type}: {expression}。回答时直接解释空间形状、截面、对称性和观察角度，"
+                "并说明下方图形可以辅助观察；不要说“我不能渲染/无法画图”。"
+            )
+        return (
+            "本产品具备后端规划和前端自动图形预览能力；本轮 planner 已规划 "
+            f"{plot_type}: {expression}。回答时说明图形含义，并提示用户查看下方预览；"
+            "不要说“我不能渲染/无法画图”。"
+        )
+    if needs_clarification:
+        return "如果用户只说想看空间图形但没有给出方程或对象，先用一句话索要具体方程/区域，不要 fallback 到无关函数图。"
+    return "当后端未规划图形时，不要声称已经生成图形；若确实需要图形但缺少对象，先明确追问。"
 
 
 def _format_retrieved_sources(sources: list[RetrievedSource]) -> str:

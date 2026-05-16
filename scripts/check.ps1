@@ -22,6 +22,16 @@ Invoke-LoggedCommand "Frontend typecheck" {
     }
 }
 
+Invoke-LoggedCommand "Frontend math rendering normalization tests" {
+    Push-Location $webRoot
+    try {
+        & npm.cmd run test:math
+    }
+    finally {
+        Pop-Location
+    }
+}
+
 Invoke-LoggedCommand "Frontend build" {
     Push-Location $webRoot
     try {

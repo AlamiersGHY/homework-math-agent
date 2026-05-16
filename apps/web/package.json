@@ -3,9 +3,11 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "powershell -NoProfile -ExecutionPolicy Bypass -File ../../scripts/dev.ps1",
+    "dev:web-only": "next dev",
     "build": "next build",
     "start": "next start",
+    "test:math": "node ../../scripts/test_math_markdown.cjs",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

@@ -200,6 +200,8 @@ async def stream_chat_with_provider(
             plan.question_type,
             answer_mode=plan.answer_mode,
             retrieved_sources=retrieved_sources,
+            plot_suggestion=plot_suggestion,
+            needs_clarification=plan.needs_clarification,
         )
         answer_parts: list[str] = []
         async for chunk in provider.stream_chat(messages):

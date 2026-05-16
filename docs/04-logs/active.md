@@ -179,6 +179,13 @@ Continue from the verified PDF RAG, citation, attachment UX, and automatic plot 
 - The planner now recognizes upper hemisphere 3D/space-graph requests and emits a supported `surface3d` suggestion for `sqrt(a^2 - x^2 - y^2)`; the plot service permits the bounded default demo parameter `a=1.0` while continuing to reject other unsupported names.
 - Frontend API connection errors now explicitly tell users to restart Next after changing `apps/web/.env.local` and recommend the root `.\scripts\dev.ps1` entry; PDF material upload/RAG remains on the same local FastAPI base URL and has no separate PDF API key.
 - `.\scripts\release-check.ps1` passed on 2026-05-15 23:53 +08 after the formula-rendering, upper-hemisphere plot, and API-base diagnostic fix: 55 backend tests, deterministic evals, frontend typecheck/build, mock API smoke including PDF RAG, browser QA including formula rendering and hemisphere Plotly canvas rendering, and dependency audit advisory completed. Browser QA screenshots are under `.cache/qa/20260515-235325`.
+- User feedback on 2026-05-16 identified three high-priority follow-up defects: formula rendering still failed on mixed `$...$$` / doubled-backslash / bare-formula output, direct local PDF material listing returned `500` despite `/health` passing, and Agent responses/planner behavior could still underuse the product's automatic visualization capability for spatial geometry.
+- The PDF/RAG connection root cause was local demo SQLite schema drift: the user's `apps/api/math_agent.db` had an older `documents` table without `warnings_json`, while release/browser QA used fresh temporary SQLite files. `init_db()` now applies an additive SQLite repair for this column and preserves existing local data.
+- Frontend math rendering now uses a scanner-style Markdown/LaTeX normalization pass that protects code spans/fences, converts `\(...\)` / `\[...\]`, repairs dangling mixed `$$`, normalizes doubled LaTeX command escapes, wraps high-confidence bare formulas, and avoids money-like `$5` false positives. `check.ps1` now runs focused math-normalization regression tests.
+- Agent prompt and planner behavior now explicitly model the product's graphing capability: when planner metadata includes a plot suggestion, the LLM is instructed not to say it cannot render and to explain the spatial geometry while the UI creates the preview. Planner coverage now includes Chinese visual-intuition wording, previous-turn equation recovery, explicit `z=f(x,y)` surfaces, implicit equations with variables on either side, and clarification without `sin(x)/x` fallback when no equation is present.
+- Plot expression handling now normalizes common LaTeX and natural-input forms before AST validation, including `\sqrt{...}`, `x^{2}`, full-width equals, `z=` prefixes, simple implicit multiplication, and variable-bearing right sides of implicit 3D equations while preserving unsafe-expression rejection.
+- `apps/web/package.json` now separates the root dev stack entry from `dev:web-only`; `scripts/dev.ps1` calls `dev:web-only` to avoid recursive `npm run dev` when launched from the web package. `next.config.ts` allows the local dev origins used by localhost/127.0.0.1 bridge access.
+- `.\scripts\release-check.ps1` passed on 2026-05-16 12:22 +08 after the robust formula-rendering, local SQLite schema repair, planner visualization-boundary, and plot expression normalization unit: 64 backend tests, 18 deterministic evals, frontend typecheck, math-rendering normalization tests, frontend production build, mock API smoke including PDF RAG, browser QA desktop/mobile, and dependency audit advisory completed. Browser QA screenshots are under `.cache/qa/20260516-122246`. Live LLM/OCR smokes were intentionally not run in this validation pass.
 
 ## Next Tasks
 
@@ -201,6 +208,7 @@ Continue from the verified PDF RAG, citation, attachment UX, and automatic plot 
 - `.\scripts\release-check.ps1` passed on 2026-05-15 22:31 +08 after the PDF connection, image attachment UX, and automatic plot execution unit; dependency audit remains advisory under TD-005.
 - `.\scripts\release-check.ps1` passed on 2026-05-15 23:13 +08 after the implicit 3D Plotly render fix and frontend API-base documentation update; dependency audit remains advisory under TD-005.
 - `.\scripts\release-check.ps1` passed on 2026-05-15 23:53 +08 after the formula-rendering, upper-hemisphere plot, and frontend API-base diagnostic fix; dependency audit remains advisory under TD-005.
+- `.\scripts\release-check.ps1` passed on 2026-05-16 12:22 +08 after the robust formula-rendering, local SQLite schema repair, planner visualization-boundary, and plot expression normalization unit; dependency audit remains advisory under TD-005.
 
 ## Exit Checklist
 
@@ -208,6 +216,7 @@ Continue from the verified PDF RAG, citation, attachment UX, and automatic plot 
 - API changes must stay aligned with `docs/01-architecture/api-contracts.md`.
 - Frontend chat work should use native `fetch` stream for `POST /chat/stream`.
 - Math rendering/UI tasks must be checked with at least one formula-heavy answer, not only the empty starter screen.
+- Math rendering changes must pass `npm run test:math` through `.\scripts\check.ps1`, covering mixed delimiters, doubled LaTeX escapes, bare command runs, code protection, and non-formula dollar text.
 - OCR must not auto-submit recognized text into chat before explicit user send; current chat-style image attachments keep OCR text hidden from the textarea and pass it as `confirmed_ocr_text` only when sending.
 - Plot viewer must consume backend Plotly-style specs and must not rederive math in the UI component.
 - Plot artifacts must be generated by backend plot preview and restored from session detail when available.

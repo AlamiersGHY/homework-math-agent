@@ -52,6 +52,18 @@ def test_visualization_question_produces_plot_suggestion() -> None:
     assert plan.plot_suggestion.expression == "sin(x*y)"
 
 
+def test_english_surface_request_strips_explanatory_tail() -> None:
+    plan = plan_agent_turn(
+        ChatStreamRequest(message="Plot z = sin(x*y) as a 3D surface.", answer_mode="direct")
+    )
+
+    assert plan.question_type == QuestionType.VISUALIZATION
+    assert plan.needs_plot is True
+    assert plan.plot_type == PlotType.SURFACE3D
+    assert plan.plot_suggestion is not None
+    assert plan.plot_suggestion.expression == "sin(x*y)"
+
+
 def test_english_graph_request_produces_function_plot_suggestion() -> None:
     plan = plan_agent_turn(
         ChatStreamRequest(message="Draw the graph of y = sin(x).", answer_mode="direct")
@@ -86,6 +98,79 @@ def test_upper_hemisphere_request_produces_surface_plot_suggestion() -> None:
     assert plan.plot_type == PlotType.SURFACE3D
     assert plan.plot_suggestion is not None
     assert plan.plot_suggestion.expression == "sqrt(a^2 - x^2 - y^2)"
+
+
+def test_chinese_spatial_surface_request_produces_surface3d() -> None:
+    plan = plan_agent_turn(
+        ChatStreamRequest(
+            message="这个几何曲面想象不出来：z = x^2 - y^2，帮我看空间图形",
+            answer_mode="direct",
+        )
+    )
+
+    assert plan.question_type == QuestionType.VISUALIZATION
+    assert plan.needs_plot is True
+    assert plan.plot_type == PlotType.SURFACE3D
+    assert plan.plot_suggestion is not None
+    assert plan.plot_suggestion.expression == "x^2 - y^2"
+
+
+def test_chinese_spatial_implicit_request_produces_implicit3d() -> None:
+    plan = plan_agent_turn(
+        ChatStreamRequest(
+            message="这个空间图形想象不出来：x^2 + y^2 + z^2 = 1",
+            answer_mode="direct",
+        )
+    )
+
+    assert plan.question_type == QuestionType.VISUALIZATION
+    assert plan.needs_plot is True
+    assert plan.plot_type == PlotType.IMPLICIT3D
+    assert plan.plot_suggestion is not None
+    assert plan.plot_suggestion.expression == "x^2 + y^2 + z^2 = 1"
+
+
+def test_spatial_request_without_expression_asks_clarification_without_sin_fallback() -> None:
+    plan = plan_agent_turn(
+        ChatStreamRequest(message="这个几何曲面想象不出来", answer_mode="direct")
+    )
+
+    assert plan.question_type == QuestionType.VISUALIZATION
+    assert plan.needs_clarification is True
+    assert plan.needs_plot is False
+    assert plan.plot_suggestion is None
+
+
+def test_implicit_equation_can_have_variables_on_right_side() -> None:
+    plan = plan_agent_turn(
+        ChatStreamRequest(message="z^2 = 1 - x^2 - y^2 的空间图形", answer_mode="direct")
+    )
+
+    assert plan.question_type == QuestionType.VISUALIZATION
+    assert plan.needs_plot is True
+    assert plan.plot_type == PlotType.IMPLICIT3D
+    assert plan.plot_suggestion is not None
+    assert plan.plot_suggestion.expression == "z^2 = 1 - x^2 - y^2"
+
+
+def test_contextual_spatial_request_uses_previous_equation() -> None:
+    plan = plan_agent_turn(
+        ChatStreamRequest(
+            message="这个几何曲面想象不出来",
+            answer_mode="direct",
+            context={
+                "previous_turns": [
+                    {"role": "user", "content": "x^4 + y^4 + z^4 = 1"}
+                ]
+            },
+        )
+    )
+
+    assert plan.question_type == QuestionType.VISUALIZATION
+    assert plan.needs_plot is True
+    assert plan.plot_type == PlotType.IMPLICIT3D
+    assert plan.plot_suggestion is not None
+    assert plan.plot_suggestion.expression == "x^4 + y^4 + z^4 = 1"
 
 
 def test_broad_request_asks_for_clarification_and_records_weak_point() -> None:

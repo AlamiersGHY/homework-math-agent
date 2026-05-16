@@ -34,7 +34,7 @@ try {
     Push-Location $webRoot
     try {
         $env:NEXT_PUBLIC_API_BASE_URL = "http://127.0.0.1:$ApiPort"
-        & npm.cmd run dev -- --hostname 127.0.0.1 --port $WebPort
+        & npm.cmd run dev:web-only -- --hostname 127.0.0.1 --port $WebPort
     }
     finally {
         Pop-Location

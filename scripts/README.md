@@ -13,7 +13,9 @@ The applications are scaffolded and have local commands:
 | API | `.\.venv\Scripts\python -m pytest` | `apps/api` | Run backend tests. |
 | API | `$env:PYTHONPATH = "src"; .\.venv\Scripts\python -m uvicorn math_agent_api.main:app --reload` | `apps/api` | Start the FastAPI dev server. |
 | Web | `npm run dev` | `apps/web` | Start the Next.js dev server. |
+| Web | `npm run dev:web-only` | `apps/web` | Start only the Next.js dev server; root `npm run dev` delegates to `scripts/dev.ps1`. |
 | Web | `npm run build` | `apps/web` | Build the frontend. |
+| Web | `npm run test:math` | `apps/web` | Run focused Markdown/LaTeX normalization regression tests. |
 | Web | `npm run typecheck` | `apps/web` | Run TypeScript checks. |
 
 ## Project-Level Commands
@@ -25,7 +27,7 @@ Project-level scripts now wrap the app-local commands through these stable entry
 | `.\scripts\dev.ps1` | Start the API and web app together for local development. |
 | `.\scripts\test.ps1` | Run deterministic backend pytest coverage. |
 | `.\scripts\eval.ps1` | Run deterministic Agent and visualization evals from `evals/`. |
-| `.\scripts\check.ps1` | Run backend tests, evals, frontend typecheck, and frontend build sequentially. |
+| `.\scripts\check.ps1` | Run backend tests, evals, frontend typecheck, focused math-rendering tests, and frontend build sequentially. |
 | `.\scripts\browser-qa.ps1` | Run production-build desktop/mobile Playwright QA against mock API/OCR. |
 | `.\scripts\release-check.ps1` | Run full local release validation: `check`, mock API smoke, browser QA, and dependency audit advisory. |
 
@@ -42,6 +44,7 @@ Still planned:
 - Scripts should not encode product or architecture decisions that are absent from `docs/`.
 - When a script becomes the official way to verify work, update `docs/02-workflow/testing-strategy.md`.
 - `check.ps1` intentionally clears `apps/web/.next` before typecheck and runs the Next checks sequentially to avoid generated-type races.
+- `check.ps1` includes `npm run test:math` so formula normalization regressions are caught before build/browser QA.
 - `browser-qa.ps1` rebuilds the frontend with the QA API base URL before starting `next start`; this avoids stale `NEXT_PUBLIC_API_BASE_URL` bundles.
 - `release-check.ps1` treats `npm audit --omit=dev` findings as advisory by default because TD-005 is tracked; pass `-StrictAudit` to fail on audit findings.
 - `release-check.ps1 -LiveLLM` also runs the real OpenAI-compatible LLM smoke when local credentials are configured.

@@ -1,5 +1,6 @@
 import ast
 import math
+import re
 from collections.abc import Callable
 
 from math_agent_api.schemas.common import PlotType
@@ -30,18 +31,86 @@ ALLOWED_CONSTANTS = {"e": math.e, "pi": math.pi}
 DEFAULT_PARAMETER_VALUES = {"a": 1.0}
 MAX_SAMPLES_2D = 120
 MAX_SAMPLES_3D_AXIS = 35
+FUNCTION_ALIASES = {"ln": "log"}
 
 
 def create_plot_preview(request: PlotPreviewRequest) -> PlotPreviewResponse:
-    if request.plot_type == PlotType.FUNCTION2D:
-        return _create_function2d(request)
-    if request.plot_type == PlotType.SURFACE3D:
-        return _create_surface3d(request)
-    if request.plot_type == PlotType.REGION2D:
-        return _create_region2d(request)
-    if request.plot_type == PlotType.IMPLICIT3D:
-        return _create_implicit3d(request)
+    normalized_request = _normalize_plot_request(request)
+    if normalized_request.plot_type == PlotType.FUNCTION2D:
+        return _create_function2d(normalized_request)
+    if normalized_request.plot_type == PlotType.SURFACE3D:
+        return _create_surface3d(normalized_request)
+    if normalized_request.plot_type == PlotType.REGION2D:
+        return _create_region2d(normalized_request)
+    if normalized_request.plot_type == PlotType.IMPLICIT3D:
+        return _create_implicit3d(normalized_request)
     raise PlotValidationError("This plot type is not implemented in the MVP preview yet.")
+
+
+def _normalize_plot_request(request: PlotPreviewRequest) -> PlotPreviewRequest:
+    return request.model_copy(update={"expression": normalize_plot_expression(request.expression)})
+
+
+def normalize_plot_expression(expression: str) -> str:
+    normalized = expression.strip()
+    normalized = (
+        normalized.replace("\\(", " ")
+        .replace("\\)", " ")
+        .replace("\\[", " ")
+        .replace("\\]", " ")
+        .replace("$", " ")
+        .replace("＝", "=")
+        .replace("，", ",")
+        .replace("。", ".")
+    )
+    normalized = normalized.replace("\\left", "").replace("\\right", "")
+    normalized = _replace_latex_sqrt(normalized)
+    normalized = re.sub(r"\\frac\s*\{([^{}]+)\}\s*\{([^{}]+)\}", r"((\1)/(\2))", normalized)
+    normalized = re.sub(r"\^\s*\{([^{}]+)\}", r"^(\1)", normalized)
+    normalized = re.sub(r"_\s*\{([^{}]+)\}", r"_\1", normalized)
+    normalized = normalized.replace("{", "(").replace("}", ")")
+    normalized = re.sub(r"\\([A-Za-z]+)", r"\1", normalized)
+    for alias, target in FUNCTION_ALIASES.items():
+        normalized = re.sub(rf"\b{alias}\b", target, normalized)
+    if normalized.count("=") == 1 and re.match(r"^\s*[xyz]\s*=", normalized, flags=re.IGNORECASE):
+        normalized = normalized.split("=", 1)[1]
+    normalized = re.sub(r"(\d)([A-Za-z(])", r"\1*\2", normalized)
+    normalized = re.sub(r"([xyz])(?=[xyz])", r"\1*", normalized)
+    normalized = re.sub(r"\b(sin|cos|tan|sqrt|log|ln|exp)\s+([A-Za-z0-9(])", r"\1(\2", normalized)
+    normalized = re.sub(r"\s+", " ", normalized).strip(" .;:,")
+    if normalized.count("(") > normalized.count(")"):
+        normalized += ")" * (normalized.count("(") - normalized.count(")"))
+    return normalized
+
+
+def _replace_latex_sqrt(expression: str) -> str:
+    marker = "\\sqrt"
+    index = expression.find(marker)
+    while index >= 0:
+        brace_start = expression.find("{", index + len(marker))
+        if brace_start < 0:
+            index = expression.find(marker, index + len(marker))
+            continue
+        brace_end = _find_matching_brace(expression, brace_start)
+        if brace_end < 0:
+            index = expression.find(marker, index + len(marker))
+            continue
+        inner = expression[brace_start + 1 : brace_end]
+        expression = expression[:index] + f"sqrt({inner})" + expression[brace_end + 1 :]
+        index = expression.find(marker, index + len(inner) + 6)
+    return expression
+
+
+def _find_matching_brace(expression: str, start: int) -> int:
+    depth = 0
+    for index in range(start, len(expression)):
+        if expression[index] == "{":
+            depth += 1
+        elif expression[index] == "}":
+            depth -= 1
+            if depth == 0:
+                return index
+    return -1
 
 
 def _create_function2d(request: PlotPreviewRequest) -> PlotPreviewResponse:
@@ -276,11 +345,23 @@ def _split_implicit_equation(expression: str) -> tuple[str, float]:
     left, right = [part.strip() for part in normalized.split("=", 1)]
     if not left or not right:
         raise PlotValidationError("implicit3d expression must include both sides of the equation.")
+    if _expression_names(right):
+        return f"({left}) - ({right})", 0.0
     level_evaluator = _compile_expression(right, set())
     level = _safe_eval(level_evaluator, {})
     if level is None:
         raise PlotValidationError("implicit3d equation level must be a finite number.")
     return left, level
+
+
+def _expression_names(expression: str) -> set[str]:
+    normalized = expression.replace("^", "**").strip()
+    try:
+        tree = ast.parse(normalized, mode="eval")
+    except SyntaxError:
+        return set()
+    reserved = set(ALLOWED_FUNCTIONS) | set(ALLOWED_CONSTANTS) | set(DEFAULT_PARAMETER_VALUES)
+    return {node.id for node in ast.walk(tree) if isinstance(node, ast.Name)} - reserved
 
 
 def _get_valid_range(ranges: dict[str, tuple[float, float]], variable: str) -> tuple[float, float]:

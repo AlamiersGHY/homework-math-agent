@@ -88,6 +88,25 @@ def test_plot_preview_surface3d_allows_default_radius_parameter_a() -> None:
     assert payload["spec"]["data"][0]["z"][17][17] == pytest.approx(1.0)
 
 
+def test_plot_preview_surface3d_normalizes_latex_expression() -> None:
+    client = TestClient(app)
+
+    response = client.post(
+        "/plots/preview",
+        json={
+            "plot_type": "surface3d",
+            "expression": r"$z=\\sqrt{1-x^{2}-y^{2}}$",
+            "variables": ["x", "y"],
+            "ranges": {"x": [-1, 1], "y": [-1, 1]},
+        },
+    )
+    payload = response.json()
+
+    assert response.status_code == 200
+    assert payload["plot_type"] == "surface3d"
+    assert payload["spec"]["layout"]["title"]["text"] == "z = sqrt(1-x^(2)-y^(2))"
+
+
 def test_plot_preview_implicit3d_returns_plotly_isosurface() -> None:
     client = TestClient(app)
 
@@ -114,6 +133,28 @@ def test_plot_preview_implicit3d_returns_plotly_isosurface() -> None:
     assert len(values) == 35 * 35 * 35
     assert min(value for value in values if value is not None) < 0
     assert max(value for value in values if value is not None) > 0
+
+
+def test_plot_preview_implicit3d_normalizes_latex_and_variable_right_side() -> None:
+    client = TestClient(app)
+
+    response = client.post(
+        "/plots/preview",
+        json={
+            "plot_type": "implicit3d",
+            "expression": r"$z^{2} = 1 - x^{2} - y^{2}$",
+            "variables": ["x", "y", "z"],
+            "ranges": {"x": [-1.5, 1.5], "y": [-1.5, 1.5], "z": [-1.5, 1.5]},
+        },
+    )
+    payload = response.json()
+
+    assert response.status_code == 200
+    assert payload["plot_type"] == "implicit3d"
+    trace = payload["spec"]["data"][0]
+    assert trace["type"] == "isosurface"
+    assert min(value for value in trace["value"] if value is not None) < 0
+    assert max(value for value in trace["value"] if value is not None) > 0
 
 
 def test_plot_preview_region2d_returns_plotly_region() -> None:

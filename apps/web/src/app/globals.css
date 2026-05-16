@@ -89,6 +89,12 @@ textarea {
   padding: 0.25rem 0;
 }
 
+.math-markdown .katex-error {
+  color: inherit;
+  font-family: inherit;
+  white-space: normal;
+}
+
 .math-markdown-inverted code {
   background: rgb(255 255 255 / 0.16);
 }
