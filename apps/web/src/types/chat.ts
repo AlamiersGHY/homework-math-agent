@@ -14,6 +14,8 @@ export type PlotType = "function2d" | "surface3d" | "region2d" | "implicit3d";
 
 export type ChatRole = "user" | "assistant";
 
+export type ChatStyle = "default" | "playful" | "strict" | "custom";
+
 export type ChatMessage = {
   id: string;
   role: ChatRole;
@@ -30,6 +32,7 @@ export type ChatMessage = {
   plot?: PlotPreviewResponse | null;
   plotLoading?: boolean;
   plotError?: string | null;
+  quickReplies?: string[];
 };
 
 export type ChatMessageAttachment = {
@@ -38,6 +41,7 @@ export type ChatMessageAttachment = {
   fileName: string;
   previewUrl: string;
   annotated?: boolean;
+  isLegacyPlaceholder?: boolean;
 };
 
 export type ChatAttachmentSnapshot = {
@@ -60,6 +64,7 @@ export type ChatStreamRequest = {
       content: string;
     }>;
     style: string;
+    soul?: string | null;
   };
 };
 
@@ -77,6 +82,7 @@ export type MetadataEventData = {
   retrieval_attempted?: boolean;
   retrieved_sources?: RetrievedSource[];
   citations?: RetrievedSource[];
+  quick_replies?: string[];
 };
 
 export type AgentPolicyPlan = {

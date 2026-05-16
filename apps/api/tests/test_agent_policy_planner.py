@@ -219,6 +219,44 @@ def test_contextual_spatial_request_uses_previous_equation() -> None:
     assert plan.plot_suggestion.expression == "x^4 + y^4 + z^4 = 1"
 
 
+def test_normal_follow_up_does_not_reuse_previous_plot_expression() -> None:
+    plan = plan_agent_turn(
+        ChatStreamRequest(
+            message="好，再解释一下这一步。",
+            answer_mode="direct",
+            context={
+                "previous_turns": [
+                    {"role": "user", "content": "x^4 + y^4 + z^4 = 1"}
+                ]
+            },
+        )
+    )
+
+    assert plan.question_type == QuestionType.CONCEPTUAL
+    assert plan.needs_plot is False
+    assert plan.plot_suggestion is None
+
+
+def test_explicit_revisit_can_reuse_previous_plot_expression() -> None:
+    plan = plan_agent_turn(
+        ChatStreamRequest(
+            message="再看一下刚才那个三维图。",
+            answer_mode="direct",
+            context={
+                "previous_turns": [
+                    {"role": "user", "content": "z = x^2 + y^2"}
+                ]
+            },
+        )
+    )
+
+    assert plan.question_type == QuestionType.VISUALIZATION
+    assert plan.needs_plot is True
+    assert plan.plot_type == PlotType.SURFACE3D
+    assert plan.plot_suggestion is not None
+    assert plan.plot_suggestion.expression == "x^2 + y^2"
+
+
 def test_current_spatial_equation_overrides_previous_session_equation() -> None:
     plan = plan_agent_turn(
         ChatStreamRequest(

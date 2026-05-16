@@ -9,7 +9,8 @@ from math_agent_api.schemas.retrieval import RetrievedSource
 
 class ChatContext(BaseModel):
     previous_turns: list[dict[str, Any]] = Field(default_factory=list)
-    style: str = "default"
+    style: str = Field(default="default", max_length=32)
+    soul: str | None = Field(default=None, max_length=800)
 
 
 class ChatAttachmentSnapshot(BaseModel):
@@ -43,6 +44,7 @@ class MetadataEvent(BaseModel):
     retrieval_attempted: bool = False
     retrieved_sources: list[RetrievedSource] = Field(default_factory=list)
     citations: list[RetrievedSource] = Field(default_factory=list)
+    quick_replies: list[str] = Field(default_factory=list)
 
 
 class DeltaEvent(BaseModel):

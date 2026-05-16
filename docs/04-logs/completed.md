@@ -275,3 +275,21 @@
 - Extended browser QA to verify image thumbnails and filenames restore from history and hidden OCR text does not leak into the user bubble.
 - Verified `.\scripts\check.ps1` on 2026-05-16 17:26 +08: 75 backend tests passed, 18 deterministic evals passed, frontend typecheck passed, `npm run test:math` passed, and frontend build passed.
 - Verified `.\scripts\browser-qa.ps1 -SkipBuild` on 2026-05-16 17:29 +08; screenshots are under `.cache/qa/20260516-172932`.
+
+## Preferences, Quick Replies, And History Preview Polish
+
+- Added bounded local `style` + `soul` chat context so the frontend can keep a global answer style preference without introducing account semantics or cross-device memory.
+- Injected style presets into the chat prompt while keeping mathematical rigor, citations, and plotting boundaries authoritative.
+- Added deterministic guided-mode quick reply suggestions to chat metadata and persisted them in session history for replay.
+- Restored image attachment history as clickable thumbnail cards with a dedicated large preview modal instead of a static filename-only placeholder.
+- Hardened plot auto-generation so ordinary same-session follow-ups do not reuse the prior graph unless the user explicitly asks to revisit the plot.
+- Extended browser QA to cover style payload submission, guided quick replies, image preview modal replay, and same-session plot reuse rejection.
+- Verified the backend subtask with `82 passed` in `apps/api/tests`.
+- Verified frontend typechecking with `npm.cmd run typecheck` from `apps/web`.
+
+## Preferences QA Hydration Fix
+
+- Fixed a production-only hydration mismatch by loading stored `style`/`soul` preferences after mount instead of during initial render.
+- Hardened browser QA so the isolated QA API base is injected explicitly into localStorage before the app loads, preventing stale `next start` bundles from drifting to the wrong backend when `-SkipBuild` is used.
+- Tightened the quick-reply QA assertion to wait on the latest assistant bubble's actual quick reply button instead of scanning the whole page body for matching text.
+- Verified `.\scripts\check.ps1` on 2026-05-16 19:02 +08 and `.\scripts\browser-qa.ps1` on 2026-05-16 19:03 +08; browser QA screenshots are under `.cache/qa/20260516-190335`.

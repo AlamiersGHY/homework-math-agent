@@ -161,6 +161,8 @@ async def test_chat_stream_persists_plot_suggestion_artifact(isolated_database) 
         and artifact["payload"]["planner"]["needs_plot"] is True
         for artifact in artifacts
     )
+    chat_metadata = next(artifact for artifact in artifacts if artifact["artifact_type"] == "chat_metadata")
+    assert chat_metadata["payload"]["quick_replies"] == []
     assert any(
         artifact["artifact_type"] == "plot_suggestion"
         and artifact["message_id"] == assistant_message["id"]
@@ -199,6 +201,68 @@ async def test_chat_stream_persists_implicit3d_plot_suggestion_artifact(isolated
         and artifact["payload"]["plot_suggestion"]["expression"] == "x^4 + y^4 + z^4 = 1"
         for artifact in artifacts
     )
+
+
+@pytest.mark.asyncio
+async def test_chat_stream_persists_guided_quick_replies(isolated_database) -> None:
+    request = ChatStreamRequest(
+        message="姹?lim(x->0) sin(x)/x",
+        answer_mode="guided",
+        context={"style": "custom", "soul": "先讲直觉，再指出易错点。"},
+    )
+
+    with isolated_database.SessionLocal() as db:
+        [
+            event
+            async for event in stream_chat_with_provider(
+                request=request,
+                session_id="session-guided-metadata",
+                question_type=QuestionType.COMPUTATIONAL,
+                provider=ShortProvider(),
+                db=db,
+            )
+        ]
+
+    client = TestClient(app)
+    response = client.get("/sessions/session-guided-metadata")
+    artifacts = response.json()["artifacts"]
+
+    assert response.status_code == 200
+    chat_metadata = next(artifact for artifact in artifacts if artifact["artifact_type"] == "chat_metadata")
+    assert chat_metadata["payload"]["quick_replies"] == [
+        "给我下一步提示",
+        "用一个例子解释",
+        "检查我的思路",
+    ]
+    assert chat_metadata["payload"]["style_config"] == {
+        "style": "custom",
+        "soul": "先讲直觉，再指出易错点。",
+    }
+
+
+@pytest.mark.asyncio
+async def test_chat_stream_persists_empty_quick_replies_for_direct_mode(isolated_database) -> None:
+    request = ChatStreamRequest(message="姹?lim(x->0) sin(x)/x", answer_mode="direct")
+
+    with isolated_database.SessionLocal() as db:
+        [
+            event
+            async for event in stream_chat_with_provider(
+                request=request,
+                session_id="session-direct-metadata",
+                question_type=QuestionType.COMPUTATIONAL,
+                provider=ShortProvider(),
+                db=db,
+            )
+        ]
+
+    client = TestClient(app)
+    response = client.get("/sessions/session-direct-metadata")
+    artifacts = response.json()["artifacts"]
+
+    assert response.status_code == 200
+    chat_metadata = next(artifact for artifact in artifacts if artifact["artifact_type"] == "chat_metadata")
+    assert chat_metadata["payload"]["quick_replies"] == []
 
 
 def test_unknown_session_returns_404(isolated_database) -> None:

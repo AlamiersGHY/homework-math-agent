@@ -207,11 +207,14 @@ Continue from the verified PDF RAG, citation, attachment UX, and automatic plot 
 - Browser QA now covers OCR attachment history replay: after sending two images, it opens the session from history, verifies data-URL thumbnails and filenames restore, and checks hidden OCR text does not leak into the user message.
 - `.\scripts\check.ps1` passed on 2026-05-16 17:26 +08 after the OCR image-history persistence fix: 75 backend tests, 18 deterministic evals, frontend typecheck, math-rendering normalization tests, and frontend production build completed.
 - `.\scripts\browser-qa.ps1 -SkipBuild` passed on 2026-05-16 17:29 +08 after the OCR image-history persistence fix. Browser QA screenshots are under `.cache/qa/20260516-172932`.
+- The preference/UX polish unit is now release-validated: bounded local `style` + `soul` chat context, prompt-side style injection, deterministic guided quick replies, historical image large-preview modals, and stricter plot-reuse boundaries for ordinary same-session follow-ups are implemented and browser-checked.
+- Browser QA now explicitly injects the isolated API base for the QA session and avoids stale Next bundle drift when `-SkipBuild` is used.
+- Targeted verification has passed for this unit: backend API/planner/session tests passed (`49 passed` locally; backend worker also ran the full API suite with `82 passed`), frontend `npm.cmd run typecheck` passed, `.\scripts\check.ps1` passed on 2026-05-16 19:02 +08, and `.\scripts\browser-qa.ps1` passed on 2026-05-16 19:03 +08 with screenshots under `.cache/qa/20260516-190335`.
 
 ## Next Tasks
 
 - Add clarification-first response behavior for planner `needs_clarification=true` so broad/off-topic/underspecified requests can return a focused first question instead of a generic answer.
-- Begin preferences + lightweight memory planning and implementation only after documenting the local schema/API boundary; keep it local-only and bounded.
+- Extend preferences/memory only after a separate local schema/API decision; this unit intentionally keeps style preference in local frontend state plus per-turn chat metadata.
 - Improve retrieval ranking/chunking after the v1 lexical baseline only if tests and ADR updates keep citation safety intact.
 - Defer live Doubao OCR smoke until the configured `DOUBAO_VISION_MODEL` points to an accessible Ark endpoint.
 - Restart any long-running local FastAPI/Next dev processes that were started before this unit; non-reload uvicorn and built Next bundles will not pick up these fixes until restarted.
@@ -222,7 +225,7 @@ Continue from the verified PDF RAG, citation, attachment UX, and automatic plot 
 - Doubao OCR live smoke additionally requires a vision-capable model or endpoint id in `DOUBAO_VISION_MODEL`.
 - Mathpix is not the active OCR provider because the user does not accept its current setup/billing requirement for this MVP; keep it as a future adapter path only.
 - `npm audit` still reports 2 moderate findings through the current Next/PostCSS dependency chain; do not run `npm audit fix --force` without a release dependency review.
-- Preferences and memory are accepted next-stage scope but are not yet implemented beyond planner intent metadata.
+- Lightweight style preference is implemented locally through bounded `style` + `soul` request context; durable profile/memory storage remains future scope.
 - `.\scripts\check.ps1` passed on 2026-05-15 15:19 +08 after moving pytest temporary directories to the system temp path to avoid Windows cache-directory permission locks.
 - `.\scripts\release-check.ps1` passed on 2026-05-15 15:20 +08: backend pytest, deterministic evals, frontend typecheck/build, mock API smoke, browser QA, and dependency audit advisory completed.
 - `.\scripts\release-check.ps1` passed on 2026-05-15 17:39 +08 after the session-history/UI foundation unit: backend pytest, deterministic evals, frontend typecheck/build, mock API smoke, browser QA, and dependency audit advisory completed.
@@ -250,6 +253,8 @@ Continue from the verified PDF RAG, citation, attachment UX, and automatic plot 
 - Retrieval/citation features must never fabricate document names, pages, sections, or chunk metadata.
 - The UI must remain chat-first and must not become a manual tool workbench.
 - User-facing UI should show learning state and next actions, not raw provider/session/debug internals.
+- Global style preference remains local-only in the demo; do not add account semantics or cross-device sync without a new decision record.
+- Guided mode should expose quick next-step suggestions after assistant answers, and quick replies must send as normal chat messages without accidentally including pending composer attachments.
 - Before finalizing a coding task, run the relevant app-local tests or explain what could not be verified.
 - Release validation should use `.\scripts\release-check.ps1`; pass `-LiveLLM` only when real LLM credentials are locally configured.
 - After completing a coherent deliverable unit, create a local Git checkpoint commit unless blocked by unrelated changes or explicit user instruction.

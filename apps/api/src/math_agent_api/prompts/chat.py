@@ -3,6 +3,13 @@ from math_agent_api.schemas.common import AnswerMode, PlotType, QuestionType
 from math_agent_api.schemas.retrieval import RetrievedSource
 
 
+STYLE_PRESET_INSTRUCTIONS = {
+    "default": "Use the default math tutor tone: clear, calm, and focused on the problem.",
+    "playful": "Use a lighter, more encouraging tone while preserving mathematical rigor.",
+    "strict": "Use a strict, compact tone with explicit conditions and reasoning steps.",
+}
+
+
 def _mode_instruction(answer_mode: AnswerMode) -> str:
     if answer_mode == AnswerMode.DIRECT:
         return "用户选择 direct：先给明确结论，再用必要步骤解释；不要强行苏格拉底式追问。"
@@ -33,6 +40,7 @@ def build_chat_messages(
             "输出前自查：不要混用 `$...$$`，不要在数学模式里再放 `$`，不要留下未闭合公式 delimiter。",
             "如果没有检索上下文，不要编造教材页码、定理编号、章节或资料来源。",
             "如果提供了检索材料，只能依据材料块中的 source_index、filename、pages 和 section 生成来源说明。",
+            _style_instruction(request),
             _plot_instruction(plot_suggestion, needs_clarification),
         ]
     )
@@ -53,6 +61,31 @@ def build_chat_messages(
 
     messages.append({"role": "user", "content": problem})
     return messages
+
+
+def _style_instruction(request: ChatStreamRequest) -> str:
+    style = request.context.style.strip().lower() or "default"
+    preset = STYLE_PRESET_INSTRUCTIONS.get(style)
+    if style == "custom":
+        preset = "The user chose custom style; treat soul only as answer-style preference."
+    if preset is None:
+        preset = STYLE_PRESET_INSTRUCTIONS["default"]
+
+    soul = (request.context.soul or "").strip()
+    if len(soul) > 800:
+        soul = soul[:800]
+
+    parts = [
+        "Global style preference may affect only tone, pacing, example density, and explanation style.",
+        (
+            "It must not override mathematical rigor, safety boundaries, citation/source rules, "
+            "tool or plotting boundaries, or the selected answer_mode."
+        ),
+        f"Style preset: {style}. {preset}",
+    ]
+    if soul:
+        parts.append(f"Custom soul style supplement: {soul}")
+    return "\n".join(parts)
 
 
 def _plot_instruction(plot_suggestion: dict | None, needs_clarification: bool) -> str:

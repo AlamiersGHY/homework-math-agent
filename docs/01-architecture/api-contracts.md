@@ -94,7 +94,8 @@
   ],
   "context": {
     "previous_turns": [],
-    "style": "default"
+    "style": "default",
+    "soul": null
   }
 }
 ```
@@ -107,6 +108,8 @@
 - `confirmed_ocr_text`：可选；当用户从 OCR 结果确认后发起聊天时使用。
 - `attachments`：可选；用于保存用户可见的图片附件快照。OCR 文本仍通过 `confirmed_ocr_text` 作为隐藏推理输入，不能替代用户可见的 `message`。
 - `context`：可选；用于传递前端当前上下文，不承载长期记忆。
+- `context.style`：可选；当前轮全局回答风格，取值为 `default`、`playful`、`strict` 或 `custom`。
+- `context.soul`：可选；当前轮全局自定义风格补充，长度应由前端和后端共同限制。
 
 响应：`text/event-stream`
 
@@ -117,7 +120,7 @@ event: start
 data: {"session_id":"...","answer_mode":"guided","user_message_id":"msg-..."}
 
 event: metadata
-data: {"question_type":"computational","should_visualize":false,"planner":{...}}
+data: {"question_type":"computational","should_visualize":false,"planner":{...},"quick_replies":["给我下一步提示","用一个例子解释","检查我的思路"]}
 
 event: delta
 data: {"text":"先观察这个极限..."}
@@ -142,6 +145,7 @@ data: {"code":"llm_provider_error","message":"LLM provider failed","details":{}}
 - `metadata` 可以在流开始或结束前出现多次。
 - `user_message_id` 和 `assistant_message_id` 是本地持久化消息 ID，前端只把它们当作 opaque id，用于把临时消息替换成可恢复的历史消息，并关联后续 plot artifact。
 - `planner` 是可选的结构化 agent policy plan。它是 additive metadata；现有 `question_type`、`should_visualize`、`plot_suggestion` 顶层字段必须继续保留，避免破坏前端兼容。
+- `quick_replies` 是 guided 模式下给用户的 3 个快捷下一步建议；direct/hint 模式应为空数组。
 - 如果需要可视化，`metadata.plot_suggestion` 可给出 plot preview 的建议参数，但真正图形生成走 `/plots/preview`。
 - 实现阶段可保留普通 JSON debug endpoint，但正式聊天契约以 SSE 为主。
 
@@ -159,6 +163,10 @@ Phase 1 planner metadata 形态：
   "retrieval_scope": "uploaded_course_materials",
   "plot_type": "surface3d",
   "memory_action": "none",
+  "style_config": {
+    "style": "default",
+    "soul": null
+  },
   "reason": "The question asks about a surface and may benefit from course context."
 }
 ```

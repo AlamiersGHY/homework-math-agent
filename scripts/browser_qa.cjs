@@ -177,6 +177,14 @@ async function waitForText(page, regex, label) {
   assertOk(regex.test(text), label);
 }
 
+async function newQaContext(browser, options, apiBaseUrl) {
+  const context = await browser.newContext(options);
+  await context.addInitScript((baseUrl) => {
+    window.localStorage.setItem("math-agent-api-base-url", baseUrl);
+  }, apiBaseUrl.replace(/\/$/, ""));
+  return context;
+}
+
 function latestPlot(page) {
   return page.locator("article").last().locator(".js-plotly-plot").last();
 }
@@ -200,8 +208,8 @@ function writeTinyPng(filePath) {
   );
 }
 
-async function runDocumentFailureFlow(browser, baseUrl, screenshotDir) {
-  const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
+async function runDocumentFailureFlow(browser, baseUrl, apiBaseUrl, screenshotDir) {
+  const context = await newQaContext(browser, { viewport: { width: 1440, height: 1000 } }, apiBaseUrl);
   const page = await context.newPage();
   const assertNoRuntimeErrors = attachRuntimeErrorGuards(page, "desktop document failure flow");
   await page.route("**/documents", (route) => route.abort("failed"));
@@ -227,8 +235,8 @@ async function runDocumentFailureFlow(browser, baseUrl, screenshotDir) {
   await context.close();
 }
 
-async function runDesktopFlow(browser, baseUrl, screenshotDir) {
-  const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
+async function runDesktopFlow(browser, baseUrl, apiBaseUrl, screenshotDir) {
+  const context = await newQaContext(browser, { viewport: { width: 1440, height: 1000 } }, apiBaseUrl);
   const page = await context.newPage();
   const assertNoRuntimeErrors = attachRuntimeErrorGuards(page, "desktop flow");
   await page.goto(baseUrl, { waitUntil: "networkidle" });
@@ -237,6 +245,39 @@ async function runDesktopFlow(browser, baseUrl, screenshotDir) {
   await assertViewportFit(page, "desktop initial");
   await assertNoRawDebugText(page);
   await page.screenshot({ path: path.join(screenshotDir, "desktop-initial.jpg"), type: "jpeg", quality: 84 });
+
+  await page.getByRole("button", { name: /soul\.md/ }).click();
+  await page.getByRole("button", { name: /自定义/ }).click();
+  await page.locator('textarea[placeholder*="全局生效"]').fill("少讲废话，先给直觉，再指出易错点。");
+  await page.getByRole("button", { name: /\u5206\u6b65\u5f15\u5bfc/ }).click();
+  const composerTextarea = page.locator('textarea[placeholder="输入数学分析问题、证明思路或函数表达式"]');
+  const styleChatRequestPromise = page.waitForRequest((request) => request.url().includes("/chat/stream"));
+  await composerTextarea.fill("解释一下导数的几何意义");
+  await page.getByRole("button", { name: /^\u53d1\u9001$/ }).click();
+  const styleChatRequest = await styleChatRequestPromise;
+  const stylePayload = JSON.parse(styleChatRequest.postData() || "{}");
+  assertOk(stylePayload.context?.style === "custom", "soul style preset was not sent to chat");
+  assertOk(
+    stylePayload.context?.soul === "少讲废话，先给直觉，再指出易错点。",
+    "custom soul prompt was not sent to chat"
+  );
+  const latestAssistant = page.locator("article").filter({ hasText: "Math Agent" }).last();
+  const exampleQuickReply = latestAssistant.getByRole("button", { name: /^用一个例子解释$/ });
+  await exampleQuickReply.waitFor({ timeout: 30000 });
+  const quickReplyRequestPromise = page.waitForRequest((request) => request.url().includes("/chat/stream"));
+  await exampleQuickReply.click();
+  const quickReplyRequest = await quickReplyRequestPromise;
+  const quickReplyPayload = JSON.parse(quickReplyRequest.postData() || "{}");
+  assertOk(quickReplyPayload.message === "用一个例子解释", "quick reply did not send the selected reply");
+  assertOk(
+    Array.isArray(quickReplyPayload.attachments) && quickReplyPayload.attachments.length === 0,
+    "quick reply accidentally sent composer attachments"
+  );
+  await page.reload({ waitUntil: "networkidle" });
+  await page.getByText("Math Agent").waitFor({ timeout: 15000 });
+  await page.getByRole("button", { name: /soul\.md · 自定义/ }).waitFor({ timeout: 15000 });
+  await page.getByRole("button", { name: /\u65b0\u5efa/ }).first().click();
+  await page.locator("article").first().waitFor({ state: "detached", timeout: 15000 }).catch(() => undefined);
 
   await uploadSamplePdf(page);
   await waitForText(page, /analysis-notes\.pdf|\d+ \u4efd\u6750\u6599\u53ef\u88ab\u81ea\u52a8\u68c0\u7d22/, "desktop PDF material was not indexed");
@@ -367,6 +408,19 @@ async function runDesktopFlow(browser, baseUrl, screenshotDir) {
   const firstSameSessionPayload = JSON.parse(firstSameSessionPlotRequest.postData() || "{}");
   assertOk(firstSameSessionPayload.expression === "x^2 + y^2", "same-session first plot used the wrong expression");
   await assertPlotlyCanvasPainted(page, latestPlot(page), "desktop same-session first plot");
+
+  let followUpPlotCount = 0;
+  const followUpPlotHandler = (route) => {
+    followUpPlotCount += 1;
+    route.continue();
+  };
+  await page.route("**/plots/preview", followUpPlotHandler);
+  await page.locator("textarea").first().fill("好，再解释一下这一步。");
+  await page.getByRole("button", { name: /^\u53d1\u9001$/ }).click();
+  await waitForText(page, /解释|这一步|思路/, "same-session plain follow-up did not answer");
+  await page.waitForTimeout(1000);
+  assertOk(followUpPlotCount === 0, "plain follow-up after plot triggered another plot preview");
+  await page.unroute("**/plots/preview", followUpPlotHandler);
 
   await page.locator("textarea").first().fill("画一下 z = y^2 - x^2 的三维曲面");
   const secondSameSessionPlotPromise = page.waitForRequest((request) => request.url().includes("/plots/preview"));
@@ -540,6 +594,15 @@ async function runDesktopFlow(browser, baseUrl, screenshotDir) {
   await waitForText(page, /qa-attachment-a\.png/, "history did not restore first image attachment filename");
   await waitForText(page, /qa-attachment-b\.png/, "history did not restore second image attachment filename");
   assertOk((await page.locator('article img[src^="data:image/"]').count()) >= 2, "history did not restore image attachment thumbnails");
+  await page.getByRole("button", { name: /查看图片 qa-attachment-a\.png/ }).first().click();
+  await page.getByRole("dialog", { name: /图片详情预览/ }).waitFor({ timeout: 15000 });
+  assertOk(
+    (await page.locator('img[src^="data:image/"]').count()) >= 1,
+    "history image preview modal did not show the restored data-url thumbnail"
+  );
+  await page.screenshot({ path: path.join(screenshotDir, "desktop-history-image-preview-modal.jpg"), type: "jpeg", quality: 84 });
+  await page.getByRole("button", { name: /关闭/ }).last().click();
+  await page.getByRole("dialog").waitFor({ state: "detached", timeout: 15000 });
   const restoredUserMessageText = await page.locator("article").first().innerText();
   assertOk(!restoredUserMessageText.includes("Solve lim_"), "history leaked hidden OCR text into the user message");
   await assertViewportFit(page, "desktop OCR attachment history");
@@ -567,12 +630,12 @@ async function runDesktopFlow(browser, baseUrl, screenshotDir) {
   await context.close();
 }
 
-async function runMobileFlow(browser, baseUrl, screenshotDir) {
-  const context = await browser.newContext({
+async function runMobileFlow(browser, baseUrl, apiBaseUrl, screenshotDir) {
+  const context = await newQaContext(browser, {
     viewport: { width: 390, height: 844 },
     isMobile: true,
     hasTouch: true,
-  });
+  }, apiBaseUrl);
   const page = await context.newPage();
   const assertNoRuntimeErrors = attachRuntimeErrorGuards(page, "mobile flow");
   await page.goto(baseUrl, { waitUntil: "networkidle" });
@@ -593,14 +656,15 @@ async function runMobileFlow(browser, baseUrl, screenshotDir) {
 
 async function main() {
   const baseUrl = getArg("--url", "http://127.0.0.1:3011");
+  const apiBaseUrl = getArg("--api-url", "http://127.0.0.1:8011");
   const screenshotDir = path.resolve(getArg("--screenshots", path.join(".cache", "qa", "browser")));
   fs.mkdirSync(screenshotDir, { recursive: true });
 
   const browser = await chromium.launch({ headless: true });
   try {
-    await runDocumentFailureFlow(browser, baseUrl, screenshotDir);
-    await runDesktopFlow(browser, baseUrl, screenshotDir);
-    await runMobileFlow(browser, baseUrl, screenshotDir);
+    await runDocumentFailureFlow(browser, baseUrl, apiBaseUrl, screenshotDir);
+    await runDesktopFlow(browser, baseUrl, apiBaseUrl, screenshotDir);
+    await runMobileFlow(browser, baseUrl, apiBaseUrl, screenshotDir);
   } finally {
     await browser.close();
   }

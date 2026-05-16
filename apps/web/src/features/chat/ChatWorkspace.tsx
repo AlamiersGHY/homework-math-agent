@@ -19,6 +19,7 @@ import { PlotViewer } from "@/features/plots/PlotViewer";
 import type {
   AnswerMode,
   ChatAttachmentSnapshot,
+  ChatStyle,
   ChatMessageAttachment,
   ChatMessage,
   DocumentSummary,
@@ -32,6 +33,8 @@ import type {
 } from "@/types/chat";
 
 const MAX_ATTACHMENT_SNAPSHOT_CHARS = 1_200_000;
+const CHAT_PREFERENCES_STORAGE_KEY = "math-agent.chat-preferences.v1";
+const MAX_SOUL_CHARS = 600;
 
 const answerModes: Array<{
   value: AnswerMode;
@@ -102,10 +105,33 @@ type ImageEditorState = {
   attachmentId: string;
 } | null;
 
+type AttachmentPreviewState = ChatMessageAttachment | null;
+
 type PlotModalState = {
   plot: PlotPreviewResponse;
   title: string;
 } | null;
+
+type ChatPreferences = {
+  style: ChatStyle;
+  soul: string;
+};
+
+const styleOptions: Array<{
+  value: ChatStyle;
+  label: string;
+  summary: string;
+}> = [
+  { value: "default", label: "默认", summary: "清晰、耐心、适中" },
+  { value: "playful", label: "风趣", summary: "轻松类比，但保持严谨" },
+  { value: "strict", label: "严格", summary: "精确、简洁、强调条件" },
+  { value: "custom", label: "自定义", summary: "使用下方 soul.md 风格" }
+];
+
+const defaultPreferences: ChatPreferences = {
+  style: "default",
+  soul: ""
+};
 
 type MaterialsState = {
   items: DocumentSummary[];
@@ -143,8 +169,13 @@ export function ChatWorkspace() {
   const [error, setError] = useState<string | null>(null);
   const [plotModal, setPlotModal] = useState<PlotModalState>(null);
   const [imageEditor, setImageEditor] = useState<ImageEditorState>(null);
+  const [attachmentPreview, setAttachmentPreview] = useState<AttachmentPreviewState>(null);
+  const [preferences, setPreferences] = useState<ChatPreferences>(defaultPreferences);
+  const [preferencesLoaded, setPreferencesLoaded] = useState(false);
+  const [preferencesOpen, setPreferencesOpen] = useState(false);
   const abortControllerRef = useRef<AbortController | null>(null);
   const transcriptRef = useRef<HTMLDivElement | null>(null);
+  const plotRequestsInFlightRef = useRef<Set<string>>(new Set());
 
   const currentMode = useMemo(
     () => answerModes.find((mode) => mode.value === answerMode) ?? answerModes[0],
@@ -159,6 +190,17 @@ export function ChatWorkspace() {
     refreshSessions();
     refreshMaterials();
   }, []);
+
+  useEffect(() => {
+    setPreferences(loadStoredPreferences());
+    setPreferencesLoaded(true);
+  }, []);
+
+  useEffect(() => {
+    if (preferencesLoaded) {
+      storePreferences(preferences);
+    }
+  }, [preferences, preferencesLoaded]);
 
   useEffect(() => {
     scrollTranscriptToBottom();
@@ -269,7 +311,9 @@ export function ChatWorkspace() {
               ? metadataLookup.get(message.id)?.citations ??
                 metadataLookup.get(message.id)?.retrieved_sources ??
                 []
-              : []
+              : [],
+          quickReplies:
+            message.role === "assistant" ? metadataLookup.get(message.id)?.quick_replies ?? [] : []
         };
       });
 
@@ -358,9 +402,13 @@ export function ChatWorkspace() {
     }
   }
 
-  async function sendMessage(messageText: string, modeOverride = answerMode) {
+  async function sendMessage(
+    messageText: string,
+    modeOverride = answerMode,
+    options?: { attachmentsOverride?: ImageAttachment[] }
+  ) {
     const actualText = messageText.trim();
-    const attachmentsToSend = imageAttachments;
+    const attachmentsToSend = options?.attachmentsOverride ?? imageAttachments;
 
     if ((!actualText && attachmentsToSend.length === 0) || isStreaming) {
       return;
@@ -422,6 +470,7 @@ export function ChatWorkspace() {
     let pendingPlotSuggestion: PlotPreviewRequest | null = null;
     let pendingSources: RetrievedSource[] = [];
     let pendingRetrievalAttempted = false;
+    let pendingQuickReplies: string[] = [];
     let activeSessionId = metadata.sessionId;
 
     try {
@@ -434,7 +483,8 @@ export function ChatWorkspace() {
           attachments: attachmentSnapshots,
           context: {
             previous_turns: previousTurns,
-            style: "default"
+            style: preferences.style,
+            soul: preferences.soul.trim() || null
           }
         },
         {
@@ -461,6 +511,7 @@ export function ChatWorkspace() {
             pendingSources = sources.length > 0 ? sources : pendingSources;
             pendingRetrievalAttempted =
               data.retrieval_attempted ?? pendingRetrievalAttempted;
+            pendingQuickReplies = data.quick_replies ?? pendingQuickReplies;
             setMetadata((current) => ({
               ...current,
               questionType: data.question_type,
@@ -512,7 +563,8 @@ export function ChatWorkspace() {
                       status: "done",
                       persisted: Boolean(data.assistant_message_id),
                       retrievalAttempted: pendingRetrievalAttempted,
-                      retrievedSources: pendingSources
+                      retrievedSources: pendingSources,
+                      quickReplies: pendingQuickReplies
                     }
                   : item
               )
@@ -558,6 +610,10 @@ export function ChatWorkspace() {
   async function handleSubmit(event?: FormEvent<HTMLFormElement>) {
     event?.preventDefault();
     await sendMessage(input);
+  }
+
+  async function handleQuickReply(reply: string) {
+    await sendMessage(reply, answerMode, { attachmentsOverride: [] });
   }
 
   function handleImagePick(files: FileList | null) {
@@ -715,9 +771,21 @@ export function ChatWorkspace() {
     options?: { persistedMessageId?: boolean; sessionId?: string | null }
   ) {
     const targetMessage = messages.find((message) => message.id === messageId);
+    if (targetMessage?.plot) {
+      return;
+    }
+
+    const requestKey = plotRequestKey(messageId, request);
+    if (plotRequestsInFlightRef.current.has(requestKey)) {
+      return;
+    }
+    plotRequestsInFlightRef.current.add(requestKey);
+
     setMessages((current) =>
       current.map((item) =>
-        item.id === messageId ? { ...item, plotLoading: true, plotError: null } : item
+        item.id === messageId && !item.plot
+          ? { ...item, plotLoading: true, plotError: null }
+          : item
       )
     );
 
@@ -743,6 +811,8 @@ export function ChatWorkspace() {
           item.id === messageId ? { ...item, plotError, plotLoading: false } : item
         )
       );
+    } finally {
+      plotRequestsInFlightRef.current.delete(requestKey);
     }
   }
 
@@ -840,6 +910,7 @@ export function ChatWorkspace() {
                         setPlotModal({ plot, title: getPlotTypeLabel(plot.plot_type) })
                       }
                       onGeneratePlot={(request) => generatePlot(message.id, request)}
+                      onPreviewAttachment={setAttachmentPreview}
                       onPlotRenderError={(plotError) =>
                         setMessages((current) =>
                           current.map((item) =>
@@ -847,6 +918,7 @@ export function ChatWorkspace() {
                           )
                         )
                       }
+                      onQuickReply={handleQuickReply}
                     />
                   ))}
                 </div>
@@ -882,6 +954,10 @@ export function ChatWorkspace() {
             onRemoveImage={removeImageAttachment}
             onSubmit={handleSubmit}
             onStop={stopStreaming}
+            preferences={preferences}
+            preferencesOpen={preferencesOpen}
+            onPreferencesChange={setPreferences}
+            onPreferencesOpenChange={setPreferencesOpen}
           />
         </section>
       </div>
@@ -901,6 +977,12 @@ export function ChatWorkspace() {
             updateImageAnnotation(imageEditor.attachmentId, blob, previewUrl);
             setImageEditor(null);
           }}
+        />
+      ) : null}
+      {attachmentPreview ? (
+        <ImagePreviewModal
+          attachment={attachmentPreview}
+          onClose={() => setAttachmentPreview(null)}
         />
       ) : null}
     </main>
@@ -1115,12 +1197,16 @@ function MessageBubble({
   message,
   onExpandPlot,
   onGeneratePlot,
-  onPlotRenderError
+  onPreviewAttachment,
+  onPlotRenderError,
+  onQuickReply
 }: {
   message: ChatMessage;
   onExpandPlot: (plot: PlotPreviewResponse) => void;
   onGeneratePlot: (request: PlotPreviewRequest) => void;
+  onPreviewAttachment: (attachment: ChatMessageAttachment) => void;
   onPlotRenderError: (message: string) => void;
+  onQuickReply: (reply: string) => void;
 }) {
   const isUser = message.role === "user";
 
@@ -1138,7 +1224,10 @@ function MessageBubble({
         </p>
         <div className="mt-2">
           {message.attachments && message.attachments.length > 0 ? (
-            <MessageAttachments attachments={message.attachments} />
+            <MessageAttachments
+              attachments={message.attachments}
+              onPreviewAttachment={onPreviewAttachment}
+            />
           ) : null}
           <MathMarkdown inverted={isUser}>
             {message.content ||
@@ -1155,6 +1244,9 @@ function MessageBubble({
             retrievalAttempted={Boolean(message.retrievalAttempted)}
             sources={message.status === "done" ? (message.retrievedSources ?? []) : []}
           />
+        ) : null}
+        {!isUser && message.status === "done" && message.quickReplies?.length ? (
+          <QuickReplyBar replies={message.quickReplies} onPick={onQuickReply} />
         ) : null}
         {!isUser && message.plotSuggestion && !message.plot ? (
           <button
@@ -1189,28 +1281,71 @@ function MessageBubble({
   );
 }
 
-function MessageAttachments({ attachments }: { attachments: ChatMessageAttachment[] }) {
+function MessageAttachments({
+  attachments,
+  onPreviewAttachment
+}: {
+  attachments: ChatMessageAttachment[];
+  onPreviewAttachment: (attachment: ChatMessageAttachment) => void;
+}) {
   return (
     <div className="mb-3 flex max-w-full gap-2 overflow-x-auto pb-1">
       {attachments.map((attachment) => (
-        <figure
-          className="relative h-28 w-28 shrink-0 overflow-hidden rounded-md border border-white/15 bg-black/10"
+        <button
+          aria-label={`查看图片 ${attachment.fileName}`}
+          className="group relative h-28 w-28 shrink-0 overflow-hidden rounded-md border border-white/15 bg-black/10 text-left focus:outline-none focus:ring-2 focus:ring-emerald-300"
           key={attachment.id}
+          onClick={() => onPreviewAttachment(attachment)}
+          type="button"
         >
           <img
             alt={attachment.fileName}
             className="h-full w-full object-cover"
             src={attachment.previewUrl}
           />
-          <figcaption className="absolute inset-x-0 bottom-0 truncate bg-neutral-950/70 px-1.5 py-1 text-[11px] font-medium text-white">
+          <span className="absolute inset-0 bg-neutral-950/0 transition group-hover:bg-neutral-950/10" />
+          <span className="absolute inset-x-0 bottom-0 truncate bg-neutral-950/70 px-1.5 py-1 text-[11px] font-medium text-white">
             {attachment.fileName}
-          </figcaption>
+          </span>
           {attachment.annotated ? (
             <span className="absolute left-1 top-1 rounded bg-emerald-600 px-1.5 py-0.5 text-[10px] font-semibold text-white">
               已标注
             </span>
           ) : null}
-        </figure>
+          {attachment.isLegacyPlaceholder ? (
+            <span className="absolute right-1 top-1 rounded bg-amber-500 px-1.5 py-0.5 text-[10px] font-semibold text-white">
+              占位
+            </span>
+          ) : null}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function QuickReplyBar({
+  replies,
+  onPick
+}: {
+  replies: string[];
+  onPick: (reply: string) => void;
+}) {
+  const visibleReplies = replies.map((reply) => reply.trim()).filter(Boolean).slice(0, 3);
+  if (visibleReplies.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="mt-3 flex flex-wrap gap-2">
+      {visibleReplies.map((reply) => (
+        <button
+          className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-sm font-medium text-emerald-900 transition hover:border-emerald-300 hover:bg-emerald-100"
+          key={reply}
+          onClick={() => onPick(reply)}
+          type="button"
+        >
+          {reply}
+        </button>
       ))}
     </div>
   );
@@ -1376,9 +1511,13 @@ function Composer({
   onEditImage,
   onImagePick,
   onInputChange,
+  onPreferencesChange,
+  onPreferencesOpenChange,
   onRemoveImage,
   onSubmit,
-  onStop
+  onStop,
+  preferences,
+  preferencesOpen
 }: {
   answerMode: AnswerMode;
   canSubmit: boolean;
@@ -1390,9 +1529,13 @@ function Composer({
   onEditImage: (attachmentId: string) => void;
   onImagePick: (files: FileList | null) => void;
   onInputChange: (value: string) => void;
+  onPreferencesChange: (preferences: ChatPreferences) => void;
+  onPreferencesOpenChange: (open: boolean) => void;
   onRemoveImage: (attachmentId: string) => void;
   onSubmit: (event?: FormEvent<HTMLFormElement>) => void;
   onStop: () => void;
+  preferences: ChatPreferences;
+  preferencesOpen: boolean;
 }) {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -1402,7 +1545,24 @@ function Composer({
       onSubmit={onSubmit}
     >
       <div className="mx-auto max-w-5xl space-y-2.5">
-        <ModeSelector answerMode={answerMode} disabled={disabled} onChange={onAnswerModeChange} />
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <ModeSelector answerMode={answerMode} disabled={disabled} onChange={onAnswerModeChange} />
+          <button
+            aria-expanded={preferencesOpen}
+            className="inline-flex h-9 items-center rounded-md border border-neutral-200 bg-neutral-50 px-3 text-sm font-semibold text-neutral-700 transition hover:border-emerald-300 hover:text-emerald-800"
+            onClick={() => onPreferencesOpenChange(!preferencesOpen)}
+            type="button"
+          >
+            soul.md · {styleOptions.find((item) => item.value === preferences.style)?.label ?? "默认"}
+          </button>
+        </div>
+        {preferencesOpen ? (
+          <SoulPreferencePanel
+            disabled={disabled}
+            onChange={onPreferencesChange}
+            preferences={preferences}
+          />
+        ) : null}
         <AttachmentTray
           attachments={imageAttachments}
           disabled={disabled}
@@ -1494,6 +1654,65 @@ function ModeSelector({
           </button>
         );
       })}
+    </div>
+  );
+}
+
+function SoulPreferencePanel({
+  disabled,
+  onChange,
+  preferences
+}: {
+  disabled: boolean;
+  onChange: (preferences: ChatPreferences) => void;
+  preferences: ChatPreferences;
+}) {
+  const soulLength = preferences.soul.length;
+
+  return (
+    <div className="rounded-lg border border-neutral-200 bg-neutral-50 p-3">
+      <div className="flex flex-wrap gap-2">
+        {styleOptions.map((option) => {
+          const active = preferences.style === option.value;
+          return (
+            <button
+              className={`rounded-md border px-3 py-2 text-left transition disabled:cursor-not-allowed ${
+                active
+                  ? "border-emerald-300 bg-white text-emerald-900 shadow-sm"
+                  : "border-neutral-200 bg-white text-neutral-700 hover:border-emerald-200"
+              }`}
+              disabled={disabled}
+              key={option.value}
+              onClick={() => onChange({ ...preferences, style: option.value })}
+              type="button"
+            >
+              <span className="block text-sm font-semibold">{option.label}</span>
+              <span className="block text-xs text-neutral-500">{option.summary}</span>
+            </button>
+          );
+        })}
+      </div>
+      <label className="mt-3 block">
+        <span className="sr-only">soul.md 自定义回答风格</span>
+        <textarea
+          className="min-h-20 w-full resize-none rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm leading-6 text-neutral-900 outline-none placeholder:text-neutral-400 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+          disabled={disabled}
+          maxLength={MAX_SOUL_CHARS}
+          onChange={(event) =>
+            onChange({
+              ...preferences,
+              style: event.target.value.trim().length > 0 ? "custom" : preferences.style,
+              soul: event.target.value.slice(0, MAX_SOUL_CHARS)
+            })
+          }
+          placeholder="写下你希望全局生效的回答风格，例如：少讲废话，先给直觉，再指出易错点。"
+          value={preferences.soul}
+        />
+      </label>
+      <div className="mt-2 flex items-center justify-between text-xs text-neutral-500">
+        <span>只影响讲解风格，不覆盖数学严谨性、引用和工具边界。</span>
+        <span>{soulLength}/{MAX_SOUL_CHARS}</span>
+      </div>
     </div>
   );
 }
@@ -1810,6 +2029,54 @@ function PlotModal({
   );
 }
 
+function ImagePreviewModal({
+  attachment,
+  onClose
+}: {
+  attachment: ChatMessageAttachment;
+  onClose: () => void;
+}) {
+  return (
+    <div
+      aria-label="图片详情预览"
+      aria-modal="true"
+      className="fixed inset-0 z-50 bg-neutral-950/60 p-4 backdrop-blur-sm"
+      role="dialog"
+    >
+      <div className="mx-auto flex h-full max-w-5xl flex-col rounded-lg bg-white shadow-2xl">
+        <div className="flex shrink-0 items-center justify-between gap-3 border-b border-neutral-200 px-4 py-3">
+          <div className="min-w-0">
+            <p className="truncate text-sm font-semibold text-neutral-950">{attachment.fileName}</p>
+            <p className="text-xs text-neutral-500">
+              {attachment.isLegacyPlaceholder
+                ? "旧历史只保存了文件名，无法恢复原图。"
+                : attachment.annotated
+                  ? "已保存标注后的图片预览。"
+                  : "历史会话中的图片附件预览。"}
+            </p>
+          </div>
+          <button
+            className="h-9 rounded-md border border-neutral-200 px-3 text-sm font-semibold text-neutral-700"
+            onClick={onClose}
+            type="button"
+          >
+            关闭
+          </button>
+        </div>
+        <div className="min-h-0 flex-1 bg-neutral-100 p-4">
+          <div className="flex h-full items-center justify-center overflow-hidden rounded-md bg-white">
+            <img
+              alt={attachment.fileName}
+              className="max-h-full max-w-full object-contain"
+              src={attachment.previewUrl}
+            />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function buildPlotLookup(
   artifacts: Array<{
     message_id: string | null;
@@ -1871,6 +2138,7 @@ type StoredChatMetadata = {
   retrieval_attempted?: boolean;
   retrieved_sources?: RetrievedSource[];
   citations?: RetrievedSource[];
+  quick_replies?: string[];
 };
 
 function buildChatMetadataLookup(
@@ -1968,7 +2236,8 @@ function legacyOcrAttachmentsFromMessage(message: {
     id: createId("legacy-image"),
     kind: "image" as const,
     fileName,
-    previewUrl: legacyAttachmentPlaceholderDataUrl(fileName)
+    previewUrl: legacyAttachmentPlaceholderDataUrl(fileName),
+    isLegacyPlaceholder: true
   }));
 }
 
@@ -2009,7 +2278,8 @@ function normalizeStoredChatMetadata(payload: Record<string, unknown>): StoredCh
     retrieval_attempted:
       typeof payload.retrieval_attempted === "boolean" ? payload.retrieval_attempted : undefined,
     retrieved_sources: retrievedSources,
-    citations
+    citations,
+    quick_replies: toQuickReplies(payload.quick_replies)
   };
   if (
     metadata.question_type ||
@@ -2017,7 +2287,8 @@ function normalizeStoredChatMetadata(payload: Record<string, unknown>): StoredCh
     metadata.plot_suggestion ||
     metadata.retrieval_attempted !== undefined ||
     retrievedSources.length > 0 ||
-    citations.length > 0
+    citations.length > 0 ||
+    (metadata.quick_replies?.length ?? 0) > 0
   ) {
     return metadata;
   }
@@ -2067,6 +2338,16 @@ function isRetrievedSource(value: unknown): value is RetrievedSource {
     typeof source.page_end === "number" &&
     typeof source.snippet === "string"
   );
+}
+
+function toQuickReplies(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value
+    .filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+    .map((item) => item.trim())
+    .slice(0, 3);
 }
 
 function revokeMessageAttachmentUrls(messages: ChatMessage[]) {
@@ -2171,6 +2452,16 @@ function plotViewerKey(messageId: string, plot: PlotPreviewResponse): string {
   return `${messageId}:${plot.plot_type}:${title}:${dataSignature}`;
 }
 
+function plotRequestKey(messageId: string, request: PlotPreviewRequest): string {
+  return [
+    messageId,
+    request.plot_type,
+    request.expression,
+    request.variables.join(","),
+    JSON.stringify(request.ranges)
+  ].join(":");
+}
+
 function formatPageRange(source: RetrievedSource) {
   if (source.page_start === source.page_end) {
     return `第 ${source.page_start} 页`;
@@ -2187,6 +2478,42 @@ function formatPlotErrorMessage(message: string): string {
     return "图形生成失败：当前题目没有可直接绘制的明确函数或曲面，请补充类似 z = f(x,y) 或 x^2 + y^2 + z^2 = 1 的表达式。";
   }
   return `图形生成失败：${message}`;
+}
+
+function loadStoredPreferences(): ChatPreferences {
+  if (typeof window === "undefined") {
+    return defaultPreferences;
+  }
+  try {
+    const raw = window.localStorage.getItem(CHAT_PREFERENCES_STORAGE_KEY);
+    if (!raw) {
+      return defaultPreferences;
+    }
+    const parsed = JSON.parse(raw) as Partial<ChatPreferences>;
+    return normalizePreferences(parsed);
+  } catch {
+    return defaultPreferences;
+  }
+}
+
+function storePreferences(preferences: ChatPreferences) {
+  if (typeof window === "undefined") {
+    return;
+  }
+  window.localStorage.setItem(
+    CHAT_PREFERENCES_STORAGE_KEY,
+    JSON.stringify(normalizePreferences(preferences))
+  );
+}
+
+function normalizePreferences(value: Partial<ChatPreferences>): ChatPreferences {
+  const style = isChatStyle(value.style) ? value.style : defaultPreferences.style;
+  const soul = typeof value.soul === "string" ? value.soul.slice(0, MAX_SOUL_CHARS) : "";
+  return { style, soul };
+}
+
+function isChatStyle(value: unknown): value is ChatStyle {
+  return value === "default" || value === "playful" || value === "strict" || value === "custom";
 }
 
 function upsertDocument(items: DocumentSummary[], document: DocumentSummary): DocumentSummary[] {

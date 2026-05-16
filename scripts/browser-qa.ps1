@@ -143,6 +143,7 @@ require("$($nextBin -replace '\\', '\\\\')");
         try {
             & node.exe (Join-Path $repoRoot "scripts\browser_qa.cjs") `
                 --url "http://127.0.0.1:$WebPort" `
+                --api-url "http://127.0.0.1:$ApiPort" `
                 --screenshots $runRoot
         }
         finally {

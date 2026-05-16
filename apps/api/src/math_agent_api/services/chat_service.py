@@ -112,6 +112,7 @@ async def stream_chat_error(
     provider_name: str,
 ) -> AsyncIterator[str]:
     plot_suggestion = plan.plot_suggestion_payload()
+    quick_replies = build_quick_replies(plan)
     yield format_sse(
         "start",
         StartEvent(session_id=session_id, answer_mode=plan.answer_mode).model_dump(mode="json"),
@@ -123,6 +124,7 @@ async def stream_chat_error(
             should_visualize=plan.needs_plot,
             plot_suggestion=plot_suggestion,
             planner=plan,
+            quick_replies=quick_replies,
         ).model_dump(mode="json"),
     )
     async for event in stream_chat_error_tail(provider_name):
@@ -153,6 +155,7 @@ async def stream_chat_with_provider(
     active_message = active_message_for_request(request)
     visible_user_message = _visible_message_for_persistence(request)
     plot_suggestion = plan.plot_suggestion_payload()
+    quick_replies = build_quick_replies(plan)
     retrieval_attempted = False
     retrieved_sources: list[RetrievedSource] = []
     has_ready_documents = False
@@ -226,6 +229,7 @@ async def stream_chat_with_provider(
             retrieval_attempted=retrieval_attempted,
             retrieved_sources=retrieved_sources,
             citations=retrieved_sources,
+            quick_replies=quick_replies,
         ).model_dump(mode="json"),
     )
 
@@ -266,6 +270,11 @@ async def stream_chat_with_provider(
                         source.model_dump(mode="json") for source in retrieved_sources
                     ],
                     "citations": [source.model_dump(mode="json") for source in retrieved_sources],
+                    "quick_replies": quick_replies,
+                    "style_config": {
+                        "style": request.context.style,
+                        "soul": request.context.soul,
+                    },
                 },
                 message_id=assistant_record.id,
             )
@@ -317,6 +326,18 @@ def _should_probe_retrieval(message: str, question_type: QuestionType) -> bool:
         "求导法则",
     ]
     return any(marker in message for marker in topic_markers)
+
+
+def build_quick_replies(plan: AgentPolicyPlan) -> list[str]:
+    if plan.answer_mode.value != "guided":
+        return []
+    if plan.needs_clarification:
+        return ["我想先补充题目条件", "给我一个入门提示", "换个更具体的问题"]
+    if plan.needs_plot:
+        return ["解释这张图的关键特征", "换一个观察角度", "继续推导下一步"]
+    if plan.question_type == QuestionType.PROOF:
+        return ["先提示证明思路", "指出关键定理", "让我自己补下一步"]
+    return ["给我下一步提示", "用一个例子解释", "检查我的思路"]
 
 
 def _visible_message_for_persistence(request: ChatStreamRequest) -> str:

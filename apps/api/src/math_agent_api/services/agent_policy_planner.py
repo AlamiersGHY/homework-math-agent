@@ -110,9 +110,16 @@ def _plan_agent_turn(
     message = active_message_for_request(request)
     planning_text = contextual_message_for_request(request)
     input_source = _input_source(request)
-    question_type = question_type_override or classify_question(planning_text)
+    allow_contextual_plot_reuse = _allows_contextual_plot_reuse(message)
+    classification_text = planning_text if allow_contextual_plot_reuse else message
+    question_type = question_type_override or classify_question(classification_text)
     plot_suggestion = create_plot_suggestion(message, question_type)
-    if plot_suggestion is None and message.strip() != planning_text.strip():
+    if (
+        plot_suggestion is None
+        and message.strip() != planning_text.strip()
+        and allow_contextual_plot_reuse
+    ):
+        question_type = QuestionType.VISUALIZATION
         plot_suggestion = create_plot_suggestion(planning_text, question_type)
     needs_retrieval = _needs_retrieval(message, question_type)
     needs_clarification = _needs_clarification(
@@ -351,6 +358,32 @@ def _is_visualization_request(message: str, normalized: str) -> bool:
         or "z=" in _strip_latex_wrappers(message).replace(" ", "").lower()
         or _extract_implicit3d_equation(message) is not None
     )
+
+
+def _allows_contextual_plot_reuse(message: str) -> bool:
+    normalized = _compact(message)
+    reuse_tokens = [
+        "再看",
+        "继续看",
+        "再画",
+        "继续画",
+        "重画",
+        "想象不出来",
+        "画出来",
+        "画一下",
+        "图",
+        "可视化",
+        "空间图形",
+        "空间感",
+        "same graph",
+        "same plot",
+        "draw it",
+        "plot it",
+        "visualize it",
+        "show it",
+        "again",
+    ]
+    return any(token in message or token in normalized for token in reuse_tokens)
 
 
 def _needs_retrieval(message: str, question_type: QuestionType) -> bool:
