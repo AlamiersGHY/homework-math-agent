@@ -230,9 +230,9 @@ async def test_chat_stream_persists_guided_quick_replies(isolated_database) -> N
     assert response.status_code == 200
     chat_metadata = next(artifact for artifact in artifacts if artifact["artifact_type"] == "chat_metadata")
     assert chat_metadata["payload"]["quick_replies"] == [
-        "给我下一步提示",
-        "用一个例子解释",
-        "检查我的思路",
+        "第一步为什么要想到标准极限？",
+        "能用夹逼定理引导我吗？",
+        "如果换成 sin(3x)/x 怎么办？",
     ]
     assert chat_metadata["payload"]["style_config"] == {
         "style": "custom",

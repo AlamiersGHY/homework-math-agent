@@ -120,7 +120,7 @@ event: start
 data: {"session_id":"...","answer_mode":"guided","user_message_id":"msg-..."}
 
 event: metadata
-data: {"question_type":"computational","should_visualize":false,"planner":{...},"quick_replies":["给我下一步提示","用一个例子解释","检查我的思路"]}
+data: {"question_type":"computational","should_visualize":false,"planner":{...},"quick_replies":["第一步为什么要想到标准极限？","能用夹逼定理引导我吗？","如果换成 sin(3x)/x 怎么办？"]}
 
 event: delta
 data: {"text":"先观察这个极限..."}
@@ -145,7 +145,7 @@ data: {"code":"llm_provider_error","message":"LLM provider failed","details":{}}
 - `metadata` 可以在流开始或结束前出现多次。
 - `user_message_id` 和 `assistant_message_id` 是本地持久化消息 ID，前端只把它们当作 opaque id，用于把临时消息替换成可恢复的历史消息，并关联后续 plot artifact。
 - `planner` 是可选的结构化 agent policy plan。它是 additive metadata；现有 `question_type`、`should_visualize`、`plot_suggestion` 顶层字段必须继续保留，避免破坏前端兼容。
-- `quick_replies` 是 guided 模式下给用户的 3 个快捷下一步建议；direct/hint 模式应为空数组。
+- `quick_replies` 是 guided 模式下给用户的 3 个快捷下一步建议；direct/hint 模式应为空数组。建议内容应贴合当前题目，优先表现为用户下一轮可能点击发送的苏格拉底式追问，而不是泛化的“给我提示/继续”按钮。
 - 如果需要可视化，`metadata.plot_suggestion` 可给出 plot preview 的建议参数，但真正图形生成走 `/plots/preview`。
 - 实现阶段可保留普通 JSON debug endpoint，但正式聊天契约以 SSE 为主。
 

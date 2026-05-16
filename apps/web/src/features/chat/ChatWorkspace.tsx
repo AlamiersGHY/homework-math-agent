@@ -184,6 +184,7 @@ export function ChatWorkspace() {
   const currentSessionTitle =
     sessions.find((session) => session.id === metadata.sessionId)?.title ?? "新学习会话";
   const canSubmit = (Boolean(input.trim()) || imageAttachments.length > 0) && !isStreaming;
+  const latestQuickReplies = useMemo(() => getLatestQuickReplies(messages), [messages]);
 
   useEffect(() => {
     refreshHealth();
@@ -613,7 +614,10 @@ export function ChatWorkspace() {
   }
 
   async function handleQuickReply(reply: string) {
-    await sendMessage(reply, answerMode, { attachmentsOverride: [] });
+    if (isStreaming) {
+      return;
+    }
+    await sendMessage(reply, "guided", { attachmentsOverride: [] });
   }
 
   function handleImagePick(files: FileList | null) {
@@ -928,7 +932,6 @@ export function ChatWorkspace() {
                           )
                         )
                       }
-                      onQuickReply={handleQuickReply}
                     />
                   ))}
                 </div>
@@ -961,9 +964,11 @@ export function ChatWorkspace() {
             onEditImage={(attachmentId) => setImageEditor({ attachmentId })}
             onImagePick={handleImagePick}
             onInputChange={setInput}
+            onQuickReply={handleQuickReply}
             onRemoveImage={removeImageAttachment}
             onSubmit={handleSubmit}
             onStop={stopStreaming}
+            quickReplies={latestQuickReplies}
           />
         </section>
       </div>
@@ -1214,15 +1219,13 @@ function MessageBubble({
   onExpandPlot,
   onGeneratePlot,
   onPreviewAttachment,
-  onPlotRenderError,
-  onQuickReply
+  onPlotRenderError
 }: {
   message: ChatMessage;
   onExpandPlot: (plot: PlotPreviewResponse) => void;
   onGeneratePlot: (request: PlotPreviewRequest) => void;
   onPreviewAttachment: (attachment: ChatMessageAttachment) => void;
   onPlotRenderError: (message: string) => void;
-  onQuickReply: (reply: string) => void;
 }) {
   const isUser = message.role === "user";
 
@@ -1260,9 +1263,6 @@ function MessageBubble({
             retrievalAttempted={Boolean(message.retrievalAttempted)}
             sources={message.status === "done" ? (message.retrievedSources ?? []) : []}
           />
-        ) : null}
-        {!isUser && message.status === "done" && message.quickReplies?.length ? (
-          <QuickReplyBar replies={message.quickReplies} onPick={onQuickReply} />
         ) : null}
         {!isUser && message.plotSuggestion && !message.plot ? (
           <button
@@ -1340,9 +1340,11 @@ function MessageAttachments({
 }
 
 function QuickReplyBar({
+  disabled,
   replies,
   onPick
 }: {
+  disabled: boolean;
   replies: string[];
   onPick: (reply: string) => void;
 }) {
@@ -1352,17 +1354,27 @@ function QuickReplyBar({
   }
 
   return (
-    <div className="mt-3 flex flex-wrap gap-2">
-      {visibleReplies.map((reply) => (
-        <button
-          className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-sm font-medium text-emerald-900 transition hover:border-emerald-300 hover:bg-emerald-100"
-          key={reply}
-          onClick={() => onPick(reply)}
-          type="button"
-        >
-          {reply}
-        </button>
-      ))}
+    <div
+      aria-label="推荐追问"
+      className="rounded-lg border border-emerald-100 bg-emerald-50/70 px-3 py-2"
+    >
+      <div className="flex items-center gap-2 overflow-x-auto pb-0.5">
+        <span className="shrink-0 text-xs font-semibold uppercase text-emerald-800">
+          推荐追问
+        </span>
+        {visibleReplies.map((reply) => (
+          <button
+            aria-label={`发送追问：${reply}`}
+            className="shrink-0 rounded-full border border-emerald-200 bg-white px-3 py-1.5 text-sm font-medium text-neutral-800 shadow-sm transition hover:border-emerald-400 hover:text-emerald-900 disabled:cursor-not-allowed disabled:opacity-50"
+            disabled={disabled}
+            key={reply}
+            onClick={() => onPick(reply)}
+            type="button"
+          >
+            {reply}
+          </button>
+        ))}
+      </div>
     </div>
   );
 }
@@ -1527,9 +1539,11 @@ function Composer({
   onEditImage,
   onImagePick,
   onInputChange,
+  onQuickReply,
   onRemoveImage,
   onSubmit,
-  onStop
+  onStop,
+  quickReplies
 }: {
   answerMode: AnswerMode;
   canSubmit: boolean;
@@ -1541,9 +1555,11 @@ function Composer({
   onEditImage: (attachmentId: string) => void;
   onImagePick: (files: FileList | null) => void;
   onInputChange: (value: string) => void;
+  onQuickReply: (reply: string) => void;
   onRemoveImage: (attachmentId: string) => void;
   onSubmit: (event?: FormEvent<HTMLFormElement>) => void;
   onStop: () => void;
+  quickReplies: string[];
 }) {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -1556,6 +1572,7 @@ function Composer({
         <div className="flex flex-wrap items-center gap-2">
           <ModeSelector answerMode={answerMode} disabled={disabled} onChange={onAnswerModeChange} />
         </div>
+        <QuickReplyBar disabled={disabled} replies={quickReplies} onPick={onQuickReply} />
         <AttachmentTray
           attachments={imageAttachments}
           disabled={disabled}
@@ -2401,6 +2418,18 @@ function toQuickReplies(value: unknown): string[] {
     .filter((item): item is string => typeof item === "string" && item.trim().length > 0)
     .map((item) => item.trim())
     .slice(0, 3);
+}
+
+function getLatestQuickReplies(messages: ChatMessage[]): string[] {
+  for (const message of [...messages].reverse()) {
+    if (message.role === "user") {
+      return [];
+    }
+    if (message.role === "assistant" && message.status === "done") {
+      return toQuickReplies(message.quickReplies);
+    }
+  }
+  return [];
 }
 
 function revokeMessageAttachmentUrls(messages: ChatMessage[]) {

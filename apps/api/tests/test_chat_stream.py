@@ -49,9 +49,9 @@ def test_chat_stream_returns_sse_events() -> None:
     assert metadata["planner"]["needs_plot"] == metadata["should_visualize"]
     assert metadata["planner"]["needs_retrieval"] is False
     assert metadata["quick_replies"] == [
-        "给我下一步提示",
-        "用一个例子解释",
-        "检查我的思路",
+        "第一步为什么要想到标准极限？",
+        "能用夹逼定理引导我吗？",
+        "如果换成 sin(3x)/x 怎么办？",
     ]
 
 
@@ -169,9 +169,9 @@ async def test_chat_stream_probes_uploaded_material_for_course_topic(isolated_da
     assert metadata["retrieved_sources"]
     assert metadata["citations"][0]["filename"] == "chain-rule-notes.pdf"
     assert metadata["quick_replies"] == [
-        "给我下一步提示",
-        "用一个例子解释",
-        "检查我的思路",
+        "导数为什么等于切线斜率？",
+        "这个几何意义和极限怎么连起来？",
+        "能用一个具体曲线说明吗？",
     ]
 
 
@@ -253,6 +253,26 @@ async def test_chat_stream_direct_mode_has_empty_quick_replies() -> None:
     metadata = _first_event_data("".join(events), "metadata")
 
     assert metadata["quick_replies"] == []
+
+
+def test_guided_quick_replies_are_contextual_socratic_questions() -> None:
+    client = TestClient(app)
+
+    with client.stream(
+        "POST",
+        "/chat/stream",
+        json={"message": "解释一下导数的几何意义", "answer_mode": "guided"},
+    ) as response:
+        body = response.read().decode("utf-8")
+
+    metadata = _first_event_data(body, "metadata")
+
+    assert metadata["quick_replies"] == [
+        "导数为什么等于切线斜率？",
+        "这个几何意义和极限怎么连起来？",
+        "能用一个具体曲线说明吗？",
+    ]
+    assert all(reply.endswith(("？", "。")) for reply in metadata["quick_replies"])
 
 
 def test_chat_stream_includes_plot_suggestion_for_visualization_question() -> None:

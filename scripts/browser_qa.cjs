@@ -268,14 +268,25 @@ async function runDesktopFlow(browser, baseUrl, apiBaseUrl, screenshotDir) {
     stylePayload.context?.soul === "少讲废话，先给直觉，再指出易错点。",
     "custom soul prompt was not sent to chat"
   );
-  const latestAssistant = page.locator("article").filter({ hasText: "Math Agent" }).last();
-  const exampleQuickReply = latestAssistant.getByRole("button", { name: /^用一个例子解释$/ });
+  await page.getByLabel("推荐追问").waitFor({ timeout: 30000 });
+  const assistantQuickReplies = await page
+    .locator("article")
+    .filter({ hasText: "Math Agent" })
+    .last()
+    .getByRole("button", { name: /发送追问/ })
+    .count();
+  assertOk(assistantQuickReplies === 0, "quick replies should not render inside assistant bubbles");
+  const exampleQuickReply = page.getByRole("button", { name: /^发送追问：导数为什么等于切线斜率？$/ });
   await exampleQuickReply.waitFor({ timeout: 30000 });
   const quickReplyRequestPromise = page.waitForRequest((request) => request.url().includes("/chat/stream"));
   await exampleQuickReply.click();
   const quickReplyRequest = await quickReplyRequestPromise;
   const quickReplyPayload = JSON.parse(quickReplyRequest.postData() || "{}");
-  assertOk(quickReplyPayload.message === "用一个例子解释", "quick reply did not send the selected reply");
+  assertOk(
+    quickReplyPayload.message === "导数为什么等于切线斜率？",
+    "quick reply did not send the selected reply"
+  );
+  assertOk(quickReplyPayload.answer_mode === "guided", "quick reply should continue guided mode");
   assertOk(
     Array.isArray(quickReplyPayload.attachments) && quickReplyPayload.attachments.length === 0,
     "quick reply accidentally sent composer attachments"

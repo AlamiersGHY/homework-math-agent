@@ -301,3 +301,12 @@
 - Changed built-in styles and custom style into mutually exclusive radio choices; the custom soul textarea is enabled only when "custom" is selected.
 - Updated browser QA to exercise the modal, save the custom style, verify the saved preference is sent through chat, and capture `desktop-soul-modal.jpg`.
 - Verified frontend typecheck and `.\scripts\browser-qa.ps1` on 2026-05-16 19:22 +08; screenshots are under `.cache/qa/20260516-192228`.
+
+## Guided Follow-Up Suggestion Polish
+
+- Moved guided-mode quick replies from the assistant bubble into a compact composer-adjacent "推荐追问" bar so the UI behaves like follow-up suggestions for the next user turn.
+- Reworked deterministic quick reply text to be contextual Socratic follow-up questions for limits, derivatives/chain rule, proofs, plots, clarification, OCR-derived problems, and integrals instead of generic "give me a hint" prompts.
+- Kept quick replies as normal chat sends in guided mode and explicitly prevented pending image attachments from being included.
+- Updated the chat SSE contract note to require contextual, next-user-turn style `quick_replies`.
+- Extended browser QA to assert composer placement, no assistant-bubble duplicate controls, selected reply payload, guided mode, and empty attachments.
+- Verified `.\scripts\check.ps1` on 2026-05-16 19:59 +08 and `.\scripts\browser-qa.ps1` on 2026-05-16 19:58 +08; browser QA screenshots are under `.cache/qa/20260516-195741`.

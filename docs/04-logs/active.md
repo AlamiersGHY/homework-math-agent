@@ -213,6 +213,12 @@ Continue from the verified PDF RAG, citation, attachment UX, and automatic plot 
 - User feedback on 2026-05-16 identified that the `soul.md` control belonged in the global header rather than the bottom composer, and that style presets/custom soul should be mutually exclusive.
 - The `soul.md` UI is now global-header owned: clicking it opens a centered modal, style choices are radio-style mutually exclusive, the custom textarea only applies when "custom" is selected, and changes take effect only after clicking save.
 - Frontend typecheck passed and `.\scripts\browser-qa.ps1` passed on 2026-05-16 19:22 +08 with a dedicated `desktop-soul-modal.jpg` screenshot under `.cache/qa/20260516-192228`.
+- User feedback on 2026-05-16 clarified that the guided-mode quick replies were only technically present, not the requested ChatGPT-like follow-up suggestions: they were hidden under the assistant bubble and used generic "give me a hint" style text.
+- Guided-mode follow-up suggestions now render as a compact composer-adjacent "推荐追问" bar driven by the latest completed assistant answer, not inside the assistant message bubble.
+- Quick reply generation is now contextual for common learning cases such as limits, derivatives/chain rule, proofs, plots, clarification, OCR-derived problems, and integrals; suggestions are phrased as likely next user questions or Socratic next-step prompts rather than generic commands.
+- Browser QA now asserts that suggestions appear near the composer, do not render inside assistant bubbles, send the selected suggestion as a normal guided chat message, and do not include pending composer attachments.
+- `.\scripts\check.ps1` passed on 2026-05-16 19:59 +08 after the follow-up suggestion polish: 83 backend tests, 18 deterministic evals, frontend typecheck, math-rendering normalization tests, and frontend production build completed.
+- `.\scripts\browser-qa.ps1` passed on 2026-05-16 19:58 +08; browser QA screenshots are under `.cache/qa/20260516-195741`.
 
 ## Next Tasks
 
@@ -257,7 +263,7 @@ Continue from the verified PDF RAG, citation, attachment UX, and automatic plot 
 - The UI must remain chat-first and must not become a manual tool workbench.
 - User-facing UI should show learning state and next actions, not raw provider/session/debug internals.
 - Global style preference remains local-only in the demo; do not add account semantics or cross-device sync without a new decision record.
-- Guided mode should expose quick next-step suggestions after assistant answers, and quick replies must send as normal chat messages without accidentally including pending composer attachments.
+- Guided mode should expose composer-adjacent, contextual next-step suggestions after assistant answers, and quick replies must send as normal chat messages without accidentally including pending composer attachments.
 - Before finalizing a coding task, run the relevant app-local tests or explain what could not be verified.
 - Release validation should use `.\scripts\release-check.ps1`; pass `-LiveLLM` only when real LLM credentials are locally configured.
 - After completing a coherent deliverable unit, create a local Git checkpoint commit unless blocked by unrelated changes or explicit user instruction.

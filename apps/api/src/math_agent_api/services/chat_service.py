@@ -112,7 +112,7 @@ async def stream_chat_error(
     provider_name: str,
 ) -> AsyncIterator[str]:
     plot_suggestion = plan.plot_suggestion_payload()
-    quick_replies = build_quick_replies(plan)
+    quick_replies = build_quick_replies(plan, active_message_for_request(request))
     yield format_sse(
         "start",
         StartEvent(session_id=session_id, answer_mode=plan.answer_mode).model_dump(mode="json"),
@@ -155,7 +155,7 @@ async def stream_chat_with_provider(
     active_message = active_message_for_request(request)
     visible_user_message = _visible_message_for_persistence(request)
     plot_suggestion = plan.plot_suggestion_payload()
-    quick_replies = build_quick_replies(plan)
+    quick_replies = build_quick_replies(plan, active_message)
     retrieval_attempted = False
     retrieved_sources: list[RetrievedSource] = []
     has_ready_documents = False
@@ -328,16 +328,34 @@ def _should_probe_retrieval(message: str, question_type: QuestionType) -> bool:
     return any(marker in message for marker in topic_markers)
 
 
-def build_quick_replies(plan: AgentPolicyPlan) -> list[str]:
+def build_quick_replies(plan: AgentPolicyPlan, message: str = "") -> list[str]:
     if plan.answer_mode.value != "guided":
         return []
+    normalized = message.lower()
     if plan.needs_clarification:
-        return ["我想先补充题目条件", "给我一个入门提示", "换个更具体的问题"]
+        return ["我应该先补充哪些条件？", "能先帮我把题意拆开吗？", "如果从最简单情形看，该看什么？"]
     if plan.needs_plot:
-        return ["解释这张图的关键特征", "换一个观察角度", "继续推导下一步"]
+        return ["我应该先观察图形的哪个特征？", "这个图形和题目条件怎么对应？", "下一步该把图形信息转成什么式子？"]
+    if (
+        "导数" in message
+        or "derivative" in normalized
+        or "chain rule" in normalized
+        or "链式法则" in message
+    ):
+        return ["导数为什么等于切线斜率？", "这个几何意义和极限怎么连起来？", "能用一个具体曲线说明吗？"]
     if plan.question_type == QuestionType.PROOF:
-        return ["先提示证明思路", "指出关键定理", "让我自己补下一步"]
-    return ["给我下一步提示", "用一个例子解释", "检查我的思路"]
+        if "单调" in message and "有界" in message:
+            return ["我应该先取哪个上确界？", "为什么单调性可以推出收敛？", "我能试着写 ε 证明吗？"]
+        return ["第一步应该先构造什么对象？", "这里最关键的定理是哪一个？", "我这样补下一步是否可行？"]
+    if plan.question_type == QuestionType.CONCEPTUAL:
+        return ["这个概念最容易混淆的点是什么？", "能用一个反例帮我区分吗？", "我该怎样判断题目在考它？"]
+    if plan.question_type == QuestionType.OCR_DERIVED:
+        return ["先帮我提炼题目条件和目标。", "这道题第一步应该选什么工具？", "我写一步思路后你帮我检查。"]
+    if "lim" in normalized or "极限" in message or "sin(x)/x" in normalized:
+        return ["第一步为什么要想到标准极限？", "能用夹逼定理引导我吗？", "如果换成 sin(3x)/x 怎么办？"]
+    if "积分" in message or "integral" in normalized:
+        return ["我应该先画出积分区域吗？", "积分次序能不能交换？", "下一步变量范围怎么确定？"]
+    return ["第一步应该观察哪个结构？", "我应该尝试哪种方法？", "如果我卡住了，下一问该问什么？"]
 
 
 def _visible_message_for_persistence(request: ChatStreamRequest) -> str:
