@@ -210,6 +210,9 @@ Continue from the verified PDF RAG, citation, attachment UX, and automatic plot 
 - The preference/UX polish unit is now release-validated: bounded local `style` + `soul` chat context, prompt-side style injection, deterministic guided quick replies, historical image large-preview modals, and stricter plot-reuse boundaries for ordinary same-session follow-ups are implemented and browser-checked.
 - Browser QA now explicitly injects the isolated API base for the QA session and avoids stale Next bundle drift when `-SkipBuild` is used.
 - Targeted verification has passed for this unit: backend API/planner/session tests passed (`49 passed` locally; backend worker also ran the full API suite with `82 passed`), frontend `npm.cmd run typecheck` passed, `.\scripts\check.ps1` passed on 2026-05-16 19:02 +08, and `.\scripts\browser-qa.ps1` passed on 2026-05-16 19:03 +08 with screenshots under `.cache/qa/20260516-190335`.
+- User feedback on 2026-05-16 identified that the `soul.md` control belonged in the global header rather than the bottom composer, and that style presets/custom soul should be mutually exclusive.
+- The `soul.md` UI is now global-header owned: clicking it opens a centered modal, style choices are radio-style mutually exclusive, the custom textarea only applies when "custom" is selected, and changes take effect only after clicking save.
+- Frontend typecheck passed and `.\scripts\browser-qa.ps1` passed on 2026-05-16 19:22 +08 with a dedicated `desktop-soul-modal.jpg` screenshot under `.cache/qa/20260516-192228`.
 
 ## Next Tasks
 

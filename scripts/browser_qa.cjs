@@ -247,8 +247,15 @@ async function runDesktopFlow(browser, baseUrl, apiBaseUrl, screenshotDir) {
   await page.screenshot({ path: path.join(screenshotDir, "desktop-initial.jpg"), type: "jpeg", quality: 84 });
 
   await page.getByRole("button", { name: /soul\.md/ }).click();
-  await page.getByRole("button", { name: /自定义/ }).click();
-  await page.locator('textarea[placeholder*="全局生效"]').fill("少讲废话，先给直觉，再指出易错点。");
+  const soulDialog = page.getByRole("dialog", { name: /soul\.md/ });
+  await soulDialog.waitFor({ timeout: 15000 });
+  await soulDialog.locator('input[type="radio"][value="custom"]').check();
+  await soulDialog.getByPlaceholder("例如：少讲废话，先给直觉，再指出易错点。").fill("少讲废话，先给直觉，再指出易错点。");
+  await page.screenshot({ path: path.join(screenshotDir, "desktop-soul-modal.jpg"), type: "jpeg", quality: 84 });
+  await soulDialog.getByRole("button", { name: /^保存$/ }).click();
+  await soulDialog.waitFor({ state: "detached", timeout: 15000 });
+  await page.getByRole("button", { name: /soul\.md · 自定义/ }).waitFor({ timeout: 15000 });
+  await assertViewportFit(page, "desktop soul preference modal save");
   await page.getByRole("button", { name: /\u5206\u6b65\u5f15\u5bfc/ }).click();
   const composerTextarea = page.locator('textarea[placeholder="输入数学分析问题、证明思路或函数表达式"]');
   const styleChatRequestPromise = page.waitForRequest((request) => request.url().includes("/chat/stream"));

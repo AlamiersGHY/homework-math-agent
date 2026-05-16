@@ -869,16 +869,26 @@ export function ChatWorkspace() {
                   </h1>
                 </div>
               </div>
-              <div className="hidden min-w-0 items-center gap-2 text-sm md:flex">
-                <span className="max-w-[26rem] truncate rounded-full border border-neutral-200 bg-neutral-50 px-3 py-1.5 font-medium text-neutral-700">
-                  {currentSessionTitle}
-                </span>
-                <span className="rounded-full border border-neutral-200 bg-white px-3 py-1.5 font-medium text-neutral-700">
-                  {currentMode.label}
-                </span>
-                <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 font-medium text-emerald-800">
-                  {questionTypeLabels[metadata.questionType]}
-                </span>
+              <div className="flex min-w-0 shrink-0 items-center gap-2 text-sm">
+                <div className="hidden min-w-0 items-center gap-2 md:flex">
+                  <span className="max-w-[20rem] truncate rounded-full border border-neutral-200 bg-neutral-50 px-3 py-1.5 font-medium text-neutral-700">
+                    {currentSessionTitle}
+                  </span>
+                  <span className="rounded-full border border-neutral-200 bg-white px-3 py-1.5 font-medium text-neutral-700">
+                    {currentMode.label}
+                  </span>
+                  <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 font-medium text-emerald-800">
+                    {questionTypeLabels[metadata.questionType]}
+                  </span>
+                </div>
+                <button
+                  aria-haspopup="dialog"
+                  className="inline-flex h-9 shrink-0 items-center rounded-full border border-neutral-200 bg-white px-3 text-sm font-semibold text-neutral-700 shadow-sm transition hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-800"
+                  onClick={() => setPreferencesOpen(true)}
+                  type="button"
+                >
+                  soul.md · {styleOptions.find((item) => item.value === preferences.style)?.label ?? "默认"}
+                </button>
               </div>
             </div>
           </header>
@@ -954,10 +964,6 @@ export function ChatWorkspace() {
             onRemoveImage={removeImageAttachment}
             onSubmit={handleSubmit}
             onStop={stopStreaming}
-            preferences={preferences}
-            preferencesOpen={preferencesOpen}
-            onPreferencesChange={setPreferences}
-            onPreferencesOpenChange={setPreferencesOpen}
           />
         </section>
       </div>
@@ -983,6 +989,16 @@ export function ChatWorkspace() {
         <ImagePreviewModal
           attachment={attachmentPreview}
           onClose={() => setAttachmentPreview(null)}
+        />
+      ) : null}
+      {preferencesOpen ? (
+        <SoulPreferenceDialog
+          onClose={() => setPreferencesOpen(false)}
+          onSave={(nextPreferences) => {
+            setPreferences(normalizePreferences(nextPreferences));
+            setPreferencesOpen(false);
+          }}
+          preferences={preferences}
         />
       ) : null}
     </main>
@@ -1511,13 +1527,9 @@ function Composer({
   onEditImage,
   onImagePick,
   onInputChange,
-  onPreferencesChange,
-  onPreferencesOpenChange,
   onRemoveImage,
   onSubmit,
-  onStop,
-  preferences,
-  preferencesOpen
+  onStop
 }: {
   answerMode: AnswerMode;
   canSubmit: boolean;
@@ -1529,13 +1541,9 @@ function Composer({
   onEditImage: (attachmentId: string) => void;
   onImagePick: (files: FileList | null) => void;
   onInputChange: (value: string) => void;
-  onPreferencesChange: (preferences: ChatPreferences) => void;
-  onPreferencesOpenChange: (open: boolean) => void;
   onRemoveImage: (attachmentId: string) => void;
   onSubmit: (event?: FormEvent<HTMLFormElement>) => void;
   onStop: () => void;
-  preferences: ChatPreferences;
-  preferencesOpen: boolean;
 }) {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -1545,24 +1553,9 @@ function Composer({
       onSubmit={onSubmit}
     >
       <div className="mx-auto max-w-5xl space-y-2.5">
-        <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <ModeSelector answerMode={answerMode} disabled={disabled} onChange={onAnswerModeChange} />
-          <button
-            aria-expanded={preferencesOpen}
-            className="inline-flex h-9 items-center rounded-md border border-neutral-200 bg-neutral-50 px-3 text-sm font-semibold text-neutral-700 transition hover:border-emerald-300 hover:text-emerald-800"
-            onClick={() => onPreferencesOpenChange(!preferencesOpen)}
-            type="button"
-          >
-            soul.md · {styleOptions.find((item) => item.value === preferences.style)?.label ?? "默认"}
-          </button>
         </div>
-        {preferencesOpen ? (
-          <SoulPreferencePanel
-            disabled={disabled}
-            onChange={onPreferencesChange}
-            preferences={preferences}
-          />
-        ) : null}
         <AttachmentTray
           attachments={imageAttachments}
           disabled={disabled}
@@ -1658,60 +1651,120 @@ function ModeSelector({
   );
 }
 
-function SoulPreferencePanel({
-  disabled,
-  onChange,
+function SoulPreferenceDialog({
+  onClose,
+  onSave,
   preferences
 }: {
-  disabled: boolean;
-  onChange: (preferences: ChatPreferences) => void;
+  onClose: () => void;
+  onSave: (preferences: ChatPreferences) => void;
   preferences: ChatPreferences;
 }) {
-  const soulLength = preferences.soul.length;
+  const [draft, setDraft] = useState<ChatPreferences>(() => normalizePreferences(preferences));
+  const soulLength = draft.soul.length;
+  const isCustom = draft.style === "custom";
 
   return (
-    <div className="rounded-lg border border-neutral-200 bg-neutral-50 p-3">
-      <div className="flex flex-wrap gap-2">
-        {styleOptions.map((option) => {
-          const active = preferences.style === option.value;
-          return (
-            <button
-              className={`rounded-md border px-3 py-2 text-left transition disabled:cursor-not-allowed ${
-                active
-                  ? "border-emerald-300 bg-white text-emerald-900 shadow-sm"
-                  : "border-neutral-200 bg-white text-neutral-700 hover:border-emerald-200"
-              }`}
-              disabled={disabled}
-              key={option.value}
-              onClick={() => onChange({ ...preferences, style: option.value })}
-              type="button"
-            >
-              <span className="block text-sm font-semibold">{option.label}</span>
-              <span className="block text-xs text-neutral-500">{option.summary}</span>
-            </button>
-          );
-        })}
-      </div>
-      <label className="mt-3 block">
-        <span className="sr-only">soul.md 自定义回答风格</span>
-        <textarea
-          className="min-h-20 w-full resize-none rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm leading-6 text-neutral-900 outline-none placeholder:text-neutral-400 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
-          disabled={disabled}
-          maxLength={MAX_SOUL_CHARS}
-          onChange={(event) =>
-            onChange({
-              ...preferences,
-              style: event.target.value.trim().length > 0 ? "custom" : preferences.style,
-              soul: event.target.value.slice(0, MAX_SOUL_CHARS)
-            })
-          }
-          placeholder="写下你希望全局生效的回答风格，例如：少讲废话，先给直觉，再指出易错点。"
-          value={preferences.soul}
-        />
-      </label>
-      <div className="mt-2 flex items-center justify-between text-xs text-neutral-500">
-        <span>只影响讲解风格，不覆盖数学严谨性、引用和工具边界。</span>
-        <span>{soulLength}/{MAX_SOUL_CHARS}</span>
+    <div
+      aria-label="soul.md 回答风格设置"
+      aria-modal="true"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-950/35 px-4 py-6 backdrop-blur-sm"
+      role="dialog"
+    >
+      <div className="flex max-h-full w-full max-w-2xl flex-col overflow-hidden rounded-lg border border-neutral-200 bg-white shadow-2xl">
+        <div className="flex items-start justify-between gap-4 border-b border-neutral-200 px-5 py-4">
+          <div>
+            <p className="text-xs font-semibold uppercase text-emerald-700">soul.md</p>
+            <h2 className="mt-1 text-lg font-semibold text-neutral-950">全局回答风格</h2>
+            <p className="mt-1 text-sm leading-6 text-neutral-500">
+              选择一种系统风格，或切到自定义后写入自己的回答气质。
+            </p>
+          </div>
+          <button
+            aria-label="关闭 soul.md 设置"
+            className="h-8 w-8 shrink-0 rounded-md text-xl leading-none text-neutral-500 transition hover:bg-neutral-100 hover:text-neutral-900"
+            onClick={onClose}
+            type="button"
+          >
+            ×
+          </button>
+        </div>
+        <div className="min-h-0 overflow-y-auto px-5 py-4">
+          <fieldset>
+            <legend className="sr-only">选择回答风格</legend>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {styleOptions.map((option) => {
+                const active = draft.style === option.value;
+                return (
+                  <label
+                    className={`flex cursor-pointer gap-3 rounded-md border p-3 transition ${
+                      active
+                        ? "border-emerald-300 bg-emerald-50 text-emerald-950 shadow-sm"
+                        : "border-neutral-200 bg-white text-neutral-700 hover:border-emerald-200"
+                    }`}
+                    key={option.value}
+                  >
+                    <input
+                      checked={active}
+                      className="mt-1 h-4 w-4 accent-emerald-700"
+                      name="chat-style"
+                      onChange={() =>
+                        setDraft((current) => ({
+                          style: option.value,
+                          soul: option.value === "custom" ? current.soul : ""
+                        }))
+                      }
+                      type="radio"
+                      value={option.value}
+                    />
+                    <span>
+                      <span className="block text-sm font-semibold">{option.label}</span>
+                      <span className="mt-1 block text-xs leading-5 text-neutral-500">
+                        {option.summary}
+                      </span>
+                    </span>
+                  </label>
+                );
+              })}
+            </div>
+          </fieldset>
+          <label className="mt-4 block">
+            <span className="text-sm font-semibold text-neutral-900">自定义 soul</span>
+            <textarea
+              className="mt-2 min-h-28 w-full resize-none rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm leading-6 text-neutral-900 outline-none placeholder:text-neutral-400 disabled:bg-neutral-50 disabled:text-neutral-400 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+              disabled={!isCustom}
+              maxLength={MAX_SOUL_CHARS}
+              onChange={(event) =>
+                setDraft({
+                  style: "custom",
+                  soul: event.target.value.slice(0, MAX_SOUL_CHARS)
+                })
+              }
+              placeholder="例如：少讲废话，先给直觉，再指出易错点。"
+              value={draft.soul}
+            />
+          </label>
+          <div className="mt-2 flex items-center justify-between text-xs text-neutral-500">
+            <span>自定义内容只在选择“自定义”时生效；不会覆盖数学严谨性、引用和工具边界。</span>
+            <span>{soulLength}/{MAX_SOUL_CHARS}</span>
+          </div>
+        </div>
+        <div className="flex justify-end gap-2 border-t border-neutral-200 bg-neutral-50 px-5 py-4">
+          <button
+            className="h-10 rounded-md border border-neutral-200 bg-white px-4 text-sm font-semibold text-neutral-700 transition hover:bg-neutral-100"
+            onClick={onClose}
+            type="button"
+          >
+            取消
+          </button>
+          <button
+            className="h-10 rounded-md bg-neutral-950 px-4 text-sm font-semibold text-white transition hover:bg-neutral-800"
+            onClick={() => onSave(draft)}
+            type="button"
+          >
+            保存
+          </button>
+        </div>
       </div>
     </div>
   );

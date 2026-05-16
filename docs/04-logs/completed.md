@@ -293,3 +293,11 @@
 - Hardened browser QA so the isolated QA API base is injected explicitly into localStorage before the app loads, preventing stale `next start` bundles from drifting to the wrong backend when `-SkipBuild` is used.
 - Tightened the quick-reply QA assertion to wait on the latest assistant bubble's actual quick reply button instead of scanning the whole page body for matching text.
 - Verified `.\scripts\check.ps1` on 2026-05-16 19:02 +08 and `.\scripts\browser-qa.ps1` on 2026-05-16 19:03 +08; browser QA screenshots are under `.cache/qa/20260516-190335`.
+
+## Global Soul Preference Modal UI
+
+- Moved the `soul.md` entry from the bottom composer to the global header so it no longer consumes the limited composer area.
+- Replaced the inline preference panel with a centered save/cancel modal; edits are staged locally and only become active after the user clicks save.
+- Changed built-in styles and custom style into mutually exclusive radio choices; the custom soul textarea is enabled only when "custom" is selected.
+- Updated browser QA to exercise the modal, save the custom style, verify the saved preference is sent through chat, and capture `desktop-soul-modal.jpg`.
+- Verified frontend typecheck and `.\scripts\browser-qa.ps1` on 2026-05-16 19:22 +08; screenshots are under `.cache/qa/20260516-192228`.
