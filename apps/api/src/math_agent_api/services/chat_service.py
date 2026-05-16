@@ -151,6 +151,7 @@ async def stream_chat_with_provider(
 ) -> AsyncIterator[str]:
     plan = plan or plan_agent_turn(request, question_type_override=question_type)
     active_message = active_message_for_request(request)
+    visible_user_message = _visible_message_for_persistence(request)
     plot_suggestion = plan.plot_suggestion_payload()
     retrieval_attempted = False
     retrieved_sources: list[RetrievedSource] = []
@@ -188,11 +189,23 @@ async def stream_chat_with_provider(
         db,
         session_id=session_id,
         role="user",
-        content=active_message,
+        content=visible_user_message,
         answer_mode=plan.answer_mode,
         question_type=plan.question_type,
         source="ocr" if request.confirmed_ocr_text else "text",
     )
+    if user_record and request.attachments:
+        append_artifact(
+            db=db,
+            session_id=session_id,
+            artifact_type="message_attachments",
+            payload={
+                "attachments": [
+                    attachment.model_dump(mode="json") for attachment in request.attachments
+                ]
+            },
+            message_id=user_record.id,
+        )
 
     yield format_sse(
         "start",
@@ -304,6 +317,15 @@ def _should_probe_retrieval(message: str, question_type: QuestionType) -> bool:
         "求导法则",
     ]
     return any(marker in message for marker in topic_markers)
+
+
+def _visible_message_for_persistence(request: ChatStreamRequest) -> str:
+    message = request.message.strip()
+    if message:
+        return message
+    if request.attachments:
+        return "请根据图片内容帮我分析这道题"
+    return active_message_for_request(request)
 
 
 def request_mentions_uploaded_material(message: str) -> bool:

@@ -83,6 +83,15 @@
   "answer_mode": "guided",
   "session_id": "optional-session-id",
   "confirmed_ocr_text": null,
+  "attachments": [
+    {
+      "id": "image-...",
+      "kind": "image",
+      "file_name": "problem.png",
+      "preview_data_url": "data:image/png;base64,...",
+      "annotated": false
+    }
+  ],
   "context": {
     "previous_turns": [],
     "style": "default"
@@ -96,6 +105,7 @@
 - `answer_mode`：`direct`、`guided` 或 `hint`，必填；前端应显式传入当前选择。
 - `session_id`：可选；后端可用于轻量会话记录。
 - `confirmed_ocr_text`：可选；当用户从 OCR 结果确认后发起聊天时使用。
+- `attachments`：可选；用于保存用户可见的图片附件快照。OCR 文本仍通过 `confirmed_ocr_text` 作为隐藏推理输入，不能替代用户可见的 `message`。
 - `context`：可选；用于传递前端当前上下文，不承载长期记忆。
 
 响应：`text/event-stream`
@@ -214,6 +224,7 @@ Phase 1 planner metadata 形态：
 - `messages` 应返回该会话的完整本地消息历史，按 `created_at` 升序排列；不得用固定 50 条截断作为默认详情行为。
 - `artifacts` 应按 `created_at` 升序返回，便于前端稳定恢复历史状态。
 - `artifact_type="chat_metadata"` 可保存该 assistant message 对应的 planner 元数据、题型、可视化意图等恢复信息。
+- `artifact_type="message_attachments"` 可保存用户消息的图片附件快照，`message_id` 应指向对应 user message；前端历史恢复时用它还原附件卡片，不能把隐藏 OCR 文本作为用户可见消息。
 - `artifact_type="plot_suggestion"` 可保存 planner 给出的可视化建议；当前前端会在 assistant 回答完成后自动调用 `/plots/preview`，历史恢复时若没有对应 `plot_preview` 仍可展示生成入口。
 - `artifact_type="plot_preview"` 保存已生成图形，`message_id` 应优先指向对应 assistant message；前端可对旧的无 `message_id` artifacts 做兼容恢复，但新写入不应依赖无绑定状态。
 

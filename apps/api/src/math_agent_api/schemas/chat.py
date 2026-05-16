@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -12,11 +12,20 @@ class ChatContext(BaseModel):
     style: str = "default"
 
 
+class ChatAttachmentSnapshot(BaseModel):
+    id: str
+    kind: Literal["image"] = "image"
+    file_name: str = Field(max_length=255)
+    preview_data_url: str | None = Field(default=None, max_length=1_500_000)
+    annotated: bool = False
+
+
 class ChatStreamRequest(BaseModel):
     message: str
     answer_mode: AnswerMode
     session_id: str | None = None
     confirmed_ocr_text: str | None = None
+    attachments: list[ChatAttachmentSnapshot] = Field(default_factory=list)
     context: ChatContext = Field(default_factory=ChatContext)
 
 

@@ -79,6 +79,60 @@ async def test_chat_stream_persists_session_messages(isolated_database) -> None:
 
 
 @pytest.mark.asyncio
+async def test_chat_stream_persists_image_attachment_snapshot_without_ocr_leak(
+    isolated_database,
+) -> None:
+    request = ChatStreamRequest(
+        message="Please solve the problem in this image",
+        answer_mode="direct",
+        confirmed_ocr_text="[qa-attachment-a.png]\nSolve lim_{x\\to0} sin(x)/x",
+        attachments=[
+            {
+                "id": "image-test",
+                "kind": "image",
+                "file_name": "qa-attachment-a.png",
+                "preview_data_url": "data:image/png;base64,abc",
+                "annotated": True,
+            }
+        ],
+    )
+
+    with isolated_database.SessionLocal() as db:
+        [
+            event
+            async for event in stream_chat_with_provider(
+                request=request,
+                session_id="session-image-history",
+                question_type=QuestionType.OCR_DERIVED,
+                provider=ShortProvider(),
+                db=db,
+            )
+        ]
+
+    client = TestClient(app)
+    response = client.get("/sessions/session-image-history")
+    payload = response.json()
+    user_message = next(message for message in payload["messages"] if message["role"] == "user")
+    attachment_artifact = next(
+        artifact
+        for artifact in payload["artifacts"]
+        if artifact["artifact_type"] == "message_attachments"
+    )
+
+    assert response.status_code == 200
+    assert user_message["content"] == "Please solve the problem in this image"
+    assert "lim_" not in user_message["content"]
+    assert attachment_artifact["message_id"] == user_message["id"]
+    assert attachment_artifact["payload"]["attachments"][0] == {
+        "id": "image-test",
+        "kind": "image",
+        "file_name": "qa-attachment-a.png",
+        "preview_data_url": "data:image/png;base64,abc",
+        "annotated": True,
+    }
+
+
+@pytest.mark.asyncio
 async def test_chat_stream_persists_plot_suggestion_artifact(isolated_database) -> None:
     request = ChatStreamRequest(message="画一下 z = sin(x*y) 的三维曲面", answer_mode="direct")
 

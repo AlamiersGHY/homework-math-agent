@@ -40,11 +40,20 @@ export type ChatMessageAttachment = {
   annotated?: boolean;
 };
 
+export type ChatAttachmentSnapshot = {
+  id: string;
+  kind: "image";
+  file_name: string;
+  preview_data_url?: string | null;
+  annotated?: boolean;
+};
+
 export type ChatStreamRequest = {
   message: string;
   answer_mode: AnswerMode;
   session_id?: string | null;
   confirmed_ocr_text?: string | null;
+  attachments?: ChatAttachmentSnapshot[];
   context?: {
     previous_turns: Array<{
       role: ChatRole;

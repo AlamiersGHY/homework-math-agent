@@ -533,6 +533,18 @@ async function runDesktopFlow(browser, baseUrl, screenshotDir) {
     return response.json();
   });
   const activeDeleteId = sessionsBeforeDelete[0].id;
+  await page.getByRole("button", { name: /\u65b0\u5efa/ }).first().click();
+  await page.locator("article").first().waitFor({ state: "detached", timeout: 15000 }).catch(() => undefined);
+  await page.getByText(/qa-attachment-a\.png|qa-attachment-b\.png/).first().waitFor({ state: "detached", timeout: 15000 }).catch(() => undefined);
+  await page.locator("aside button").nth(1).click();
+  await waitForText(page, /qa-attachment-a\.png/, "history did not restore first image attachment filename");
+  await waitForText(page, /qa-attachment-b\.png/, "history did not restore second image attachment filename");
+  assertOk((await page.locator('article img[src^="data:image/"]').count()) >= 2, "history did not restore image attachment thumbnails");
+  const restoredUserMessageText = await page.locator("article").first().innerText();
+  assertOk(!restoredUserMessageText.includes("Solve lim_"), "history leaked hidden OCR text into the user message");
+  await assertViewportFit(page, "desktop OCR attachment history");
+  await page.screenshot({ path: path.join(screenshotDir, "desktop-ocr-attachment-history.jpg"), type: "jpeg", quality: 84 });
+
   const deleteResponsePromise = page.waitForResponse(
     (response) => response.url().includes(`/sessions/${activeDeleteId}`) && response.request().method() === "DELETE"
   );

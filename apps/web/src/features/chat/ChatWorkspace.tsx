@@ -18,6 +18,7 @@ import { streamChat } from "@/lib/api/chatStream";
 import { PlotViewer } from "@/features/plots/PlotViewer";
 import type {
   AnswerMode,
+  ChatAttachmentSnapshot,
   ChatMessageAttachment,
   ChatMessage,
   DocumentSummary,
@@ -29,6 +30,8 @@ import type {
   SessionSummary,
   StartEventData
 } from "@/types/chat";
+
+const MAX_ATTACHMENT_SNAPSHOT_CHARS = 1_200_000;
 
 const answerModes: Array<{
   value: AnswerMode;
@@ -226,33 +229,49 @@ export function ChatWorkspace() {
         detail.artifacts.filter((artifact) => artifact.artifact_type === "chat_metadata"),
         assistantIds
       );
-      const loadedMessages: ChatMessage[] = detail.messages.map((message) => ({
-        id: message.id,
-        role: message.role,
-        content: message.content,
-        status: "done" as const,
-        persisted: true,
-        answerMode: message.answer_mode,
-        questionType: message.question_type,
-        source: message.source,
-        plot: message.role === "assistant" ? plotLookup.get(message.id) ?? null : null,
-        plotSuggestion:
-          message.role === "assistant"
-            ? suggestionLookup.get(message.id) ??
-              metadataLookup.get(message.id)?.plot_suggestion ??
-              null
-            : null,
-        retrievalAttempted:
-          message.role === "assistant"
-            ? metadataLookup.get(message.id)?.retrieval_attempted ?? false
-            : false,
-        retrievedSources:
-          message.role === "assistant"
-            ? metadataLookup.get(message.id)?.citations ??
-              metadataLookup.get(message.id)?.retrieved_sources ??
-              []
-            : []
-      }));
+      const attachmentLookup = buildAttachmentLookup(
+        detail.artifacts.filter((artifact) => artifact.artifact_type === "message_attachments")
+      );
+      const loadedMessages: ChatMessage[] = detail.messages.map((message) => {
+        const storedAttachments =
+          message.role === "user" ? attachmentLookup.get(message.id) ?? [] : [];
+        const legacyAttachments =
+          message.role === "user" && storedAttachments.length === 0
+            ? legacyOcrAttachmentsFromMessage(message)
+            : [];
+        const attachments = storedAttachments.length > 0 ? storedAttachments : legacyAttachments;
+        return {
+          id: message.id,
+          role: message.role,
+          content:
+            message.role === "user"
+              ? visibleStoredUserContent(message, legacyAttachments)
+              : message.content,
+          attachments,
+          status: "done" as const,
+          persisted: true,
+          answerMode: message.answer_mode,
+          questionType: message.question_type,
+          source: message.source,
+          plot: message.role === "assistant" ? plotLookup.get(message.id) ?? null : null,
+          plotSuggestion:
+            message.role === "assistant"
+              ? suggestionLookup.get(message.id) ??
+                metadataLookup.get(message.id)?.plot_suggestion ??
+                null
+              : null,
+          retrievalAttempted:
+            message.role === "assistant"
+              ? metadataLookup.get(message.id)?.retrieval_attempted ?? false
+              : false,
+          retrievedSources:
+            message.role === "assistant"
+              ? metadataLookup.get(message.id)?.citations ??
+                metadataLookup.get(message.id)?.retrieved_sources ??
+                []
+              : []
+        };
+      });
 
       revokeMessageAttachmentUrls(messages);
       setMessages(loadedMessages);
@@ -362,6 +381,7 @@ export function ChatWorkspace() {
     const hasImageAttachments = attachmentsToSend.length > 0;
     const visibleText = actualText || "请根据图片内容帮我分析这道题";
     const userMessageAttachments = toMessageAttachments(attachmentsToSend);
+    const attachmentSnapshots = await toAttachmentSnapshots(attachmentsToSend);
 
     const previousTurns = messages
       .filter((item) => item.content.trim())
@@ -411,6 +431,7 @@ export function ChatWorkspace() {
           answer_mode: modeOverride,
           session_id: metadata.sessionId,
           confirmed_ocr_text: attachmentOcrText || null,
+          attachments: attachmentSnapshots,
           context: {
             previous_turns: previousTurns,
             style: "default"
@@ -661,6 +682,24 @@ export function ChatWorkspace() {
       previewUrl: attachment.annotatedPreviewUrl ?? attachment.previewUrl,
       annotated: Boolean(attachment.annotatedPreviewUrl)
     }));
+  }
+
+  async function toAttachmentSnapshots(
+    attachments: ImageAttachment[]
+  ): Promise<ChatAttachmentSnapshot[]> {
+    const snapshots = await Promise.all(
+      attachments.map(async (attachment) => {
+        const blob = attachment.annotatedBlob ?? attachment.file;
+        return {
+          id: attachment.id,
+          kind: "image" as const,
+          file_name: attachment.fileName,
+          preview_data_url: await readAttachmentPreviewDataUrl(blob),
+          annotated: Boolean(attachment.annotatedPreviewUrl)
+        };
+      })
+    );
+    return snapshots.filter((snapshot) => Boolean(snapshot.preview_data_url));
   }
 
   function revokeAttachmentUrls(attachment: ImageAttachment) {
@@ -1864,6 +1903,99 @@ function buildChatMetadataLookup(
   return lookup;
 }
 
+function buildAttachmentLookup(
+  artifacts: Array<{
+    message_id: string | null;
+    payload: Record<string, unknown>;
+    created_at: string;
+  }>
+): Map<string, ChatMessageAttachment[]> {
+  const lookup = new Map<string, ChatMessageAttachment[]>();
+  for (const artifact of [...artifacts].sort((a, b) => a.created_at.localeCompare(b.created_at))) {
+    if (!artifact.message_id) {
+      continue;
+    }
+    const attachments = toStoredMessageAttachments(artifact.payload.attachments);
+    if (attachments.length > 0) {
+      lookup.set(artifact.message_id, attachments);
+    }
+  }
+  return lookup;
+}
+
+function toStoredMessageAttachments(value: unknown): ChatMessageAttachment[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.flatMap((item) => {
+    if (!item || typeof item !== "object") {
+      return [];
+    }
+    const attachment = item as Record<string, unknown>;
+    if (
+      attachment.kind !== "image" ||
+      typeof attachment.file_name !== "string" ||
+      typeof attachment.preview_data_url !== "string"
+    ) {
+      return [];
+    }
+    return [
+      {
+        id:
+          typeof attachment.id === "string" && attachment.id.trim()
+            ? attachment.id
+            : createId("image"),
+        kind: "image" as const,
+        fileName: attachment.file_name,
+        previewUrl: attachment.preview_data_url,
+        annotated: attachment.annotated === true
+      }
+    ];
+  });
+}
+
+function legacyOcrAttachmentsFromMessage(message: {
+  content: string;
+  source?: string | null;
+}): ChatMessageAttachment[] {
+  if (message.source !== "ocr") {
+    return [];
+  }
+  const names = Array.from(message.content.matchAll(/\[([^\]\r\n]+?\.(?:png|jpe?g|webp|gif))\]/gi))
+    .map((match) => match[1])
+    .filter(Boolean);
+  return [...new Set(names)].map((fileName) => ({
+    id: createId("legacy-image"),
+    kind: "image" as const,
+    fileName,
+    previewUrl: legacyAttachmentPlaceholderDataUrl(fileName)
+  }));
+}
+
+function visibleStoredUserContent(
+  message: { content: string; source?: string | null },
+  legacyAttachments: ChatMessageAttachment[]
+): string {
+  if (message.source === "ocr" && legacyAttachments.length > 0) {
+    return "请根据图片内容帮我分析这道题";
+  }
+  return message.content;
+}
+
+function legacyAttachmentPlaceholderDataUrl(fileName: string): string {
+  const safeName = escapeHtml(fileName);
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="320" height="320" viewBox="0 0 320 320"><rect width="320" height="320" rx="24" fill="#f5f5f4"/><rect x="72" y="76" width="176" height="128" rx="16" fill="#ffffff" stroke="#d6d3d1" stroke-width="6"/><circle cx="126" cy="124" r="20" fill="#a7f3d0"/><path d="M88 184l54-48 32 30 24-22 36 40z" fill="#10b981"/><text x="160" y="246" text-anchor="middle" font-family="Arial, sans-serif" font-size="22" font-weight="700" fill="#44403c">Image</text><text x="160" y="274" text-anchor="middle" font-family="Arial, sans-serif" font-size="14" fill="#78716c">${safeName}</text></svg>`;
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;");
+}
+
 function normalizeStoredChatMetadata(payload: Record<string, unknown>): StoredChatMetadata | null {
   const retrievedSources = toRetrievedSources(payload.retrieved_sources);
   const citations = toRetrievedSources(payload.citations);
@@ -1940,9 +2072,61 @@ function isRetrievedSource(value: unknown): value is RetrievedSource {
 function revokeMessageAttachmentUrls(messages: ChatMessage[]) {
   for (const message of messages) {
     for (const attachment of message.attachments ?? []) {
+      if (attachment.previewUrl.startsWith("data:")) {
+        continue;
+      }
       URL.revokeObjectURL(attachment.previewUrl);
     }
   }
+}
+
+function readAttachmentPreviewDataUrl(blob: Blob): Promise<string | null> {
+  return new Promise((resolve) => {
+    if (!blob.type.startsWith("image/")) {
+      resolve(null);
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result !== "string") {
+        resolve(null);
+        return;
+      }
+      if (reader.result.length <= MAX_ATTACHMENT_SNAPSHOT_CHARS) {
+        resolve(reader.result);
+        return;
+      }
+      downscaleImageDataUrl(reader.result).then(resolve);
+    };
+    reader.onerror = () => resolve(null);
+    reader.readAsDataURL(blob);
+  });
+}
+
+function downscaleImageDataUrl(dataUrl: string): Promise<string | null> {
+  return new Promise((resolve) => {
+    const image = new Image();
+    image.onload = () => {
+      const maxSide = 720;
+      const scale = Math.min(1, maxSide / Math.max(image.naturalWidth, image.naturalHeight));
+      const width = Math.max(1, Math.round(image.naturalWidth * scale));
+      const height = Math.max(1, Math.round(image.naturalHeight * scale));
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      const context = canvas.getContext("2d");
+      if (!context) {
+        resolve(null);
+        return;
+      }
+      context.drawImage(image, 0, 0, width, height);
+      const compressed = canvas.toDataURL("image/jpeg", 0.78);
+      resolve(compressed.length <= MAX_ATTACHMENT_SNAPSHOT_CHARS ? compressed : null);
+    };
+    image.onerror = () => resolve(null);
+    image.src = dataUrl;
+  });
 }
 
 function latestQuestionType(messages: ChatMessage[]): QuestionType {

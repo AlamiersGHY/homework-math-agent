@@ -266,3 +266,12 @@
 - Verified real PDF QA on `C:\Users\Alami\Downloads\邮雁智记 (1).pdf`: 27 pages, 12 chunks, broad "this pdf" chat citation to page 1, and persisted citation metadata.
 - Verified real PDF QA on `C:\Users\Alami\Downloads\第13讲 复合函数求导法则(2).pdf`: 36 pages, 36 chunks, retrieval/chat citation to page 1, and persisted citation metadata.
 - Verified `.\scripts\release-check.ps1` on 2026-05-16 14:33 +08: 74 backend tests passed, 18 deterministic evals passed, frontend typecheck passed, `npm run test:math` passed, frontend build passed, mock API smoke passed, expanded browser QA passed with screenshots under `.cache/qa/20260516-143333`, and dependency audit advisory remained tracked under TD-005.
+
+## OCR Image Attachment History Fix
+
+- Fixed historical OCR/image user turns so session replay restores chat-style image attachment cards instead of showing raw OCR text as the user message.
+- Added `attachments` to the chat stream request contract and persisted bounded image snapshots as `message_attachments` artifacts linked to the user message.
+- Kept hidden OCR text in `confirmed_ocr_text` for reasoning only; persisted user message content now remains the visible text the user sent.
+- Extended browser QA to verify image thumbnails and filenames restore from history and hidden OCR text does not leak into the user bubble.
+- Verified `.\scripts\check.ps1` on 2026-05-16 17:26 +08: 75 backend tests passed, 18 deterministic evals passed, frontend typecheck passed, `npm run test:math` passed, and frontend build passed.
+- Verified `.\scripts\browser-qa.ps1 -SkipBuild` on 2026-05-16 17:29 +08; screenshots are under `.cache/qa/20260516-172932`.

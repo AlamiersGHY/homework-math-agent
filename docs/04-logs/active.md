@@ -6,7 +6,7 @@ Agentic RAG Prototype / Intelligent Course Assistant Prototype.
 
 ## Current Goal
 
-Continue from the verified PDF RAG, citation, attachment UX, and automatic plot execution units toward clarification-first responses and lightweight preferences/memory. The current local prototype now supports PDF upload, page-aware chunk storage, deterministic retrieval, chat citation metadata, frontend source display, history replay, hidden-OCR image attachments, and automatic supported plot previews.
+Continue from the verified PDF RAG, citation, attachment UX, and automatic plot execution units toward clarification-first responses and lightweight preferences/memory. The current local prototype now supports PDF upload, page-aware chunk storage, deterministic retrieval, chat citation metadata, frontend source display, history replay, persisted image attachment cards for OCR-derived user messages, hidden-OCR image attachments, and automatic supported plot previews.
 
 ## Relevant Docs
 
@@ -200,6 +200,13 @@ Continue from the verified PDF RAG, citation, attachment UX, and automatic plot 
 - Real PDF QA passed on 2026-05-16 with `C:\Users\Alami\Downloads\邮雁智记 (1).pdf`: upload produced 27 pages and 12 chunks; "给我讲解一下这个pdf" returned a citation to page 1 of the newly uploaded PDF and persisted citation metadata.
 - Real PDF QA also passed on 2026-05-16 with `C:\Users\Alami\Downloads\第13讲 复合函数求导法则(2).pdf`: upload produced 36 pages and 36 chunks; "解释一下复合函数求导法则" retrieved page 1 and persisted citation metadata.
 - `.\scripts\release-check.ps1` passed on 2026-05-16 14:33 +08 after the same-session plot, latest-PDF RAG, delayed-source-card, and 3D view-control unit: 74 backend tests, 18 deterministic evals, frontend typecheck, math-rendering normalization tests, frontend production build, mock API smoke, expanded browser QA desktop/mobile, and dependency audit advisory completed. Browser QA screenshots are under `.cache/qa/20260516-143333`. Live LLM/OCR smokes were intentionally not run in this validation pass.
+
+- User feedback on 2026-05-16 identified that historical OCR/image turns restored as visible filename/OCR text instead of chat-style image attachment cards.
+- Chat requests now accept bounded image attachment snapshots; chat persistence stores the user-visible message separately from hidden `confirmed_ocr_text`, and writes `message_attachments` artifacts linked to the persisted user message.
+- Historical sessions now restore user image attachment cards from `message_attachments` artifacts, while keeping OCR text hidden from the user bubble.
+- Browser QA now covers OCR attachment history replay: after sending two images, it opens the session from history, verifies data-URL thumbnails and filenames restore, and checks hidden OCR text does not leak into the user message.
+- `.\scripts\check.ps1` passed on 2026-05-16 17:26 +08 after the OCR image-history persistence fix: 75 backend tests, 18 deterministic evals, frontend typecheck, math-rendering normalization tests, and frontend production build completed.
+- `.\scripts\browser-qa.ps1 -SkipBuild` passed on 2026-05-16 17:29 +08 after the OCR image-history persistence fix. Browser QA screenshots are under `.cache/qa/20260516-172932`.
 
 ## Next Tasks
 
