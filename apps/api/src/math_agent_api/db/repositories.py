@@ -150,6 +150,14 @@ class DocumentRepository:
         statement = select(DocumentRecord.id).where(DocumentRecord.status == "ready").limit(1)
         return self.db.scalars(statement).first() is not None
 
+    def list_ready_documents(self) -> Sequence[DocumentRecord]:
+        statement = (
+            select(DocumentRecord)
+            .where(DocumentRecord.status == "ready")
+            .order_by(DocumentRecord.updated_at.desc(), DocumentRecord.created_at.desc())
+        )
+        return self.db.scalars(statement).all()
+
     def create_document(
         self,
         filename: str,
@@ -218,7 +226,10 @@ class DocumentRepository:
             select(DocumentChunkRecord)
             .join(DocumentRecord)
             .where(DocumentRecord.status == "ready")
-            .order_by(DocumentChunkRecord.created_at.asc(), DocumentChunkRecord.chunk_index.asc())
+            .order_by(
+                DocumentRecord.updated_at.desc(),
+                DocumentChunkRecord.chunk_index.asc(),
+            )
         )
         return self.db.scalars(statement).all()
 

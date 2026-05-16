@@ -27,7 +27,7 @@ from math_agent_api.services.agent_policy_planner import (
     plan_agent_turn,
     should_visualize as _should_visualize,
 )
-from math_agent_api.services.retrieval_service import search_retrieval
+from math_agent_api.services.retrieval_service import search_material_overview, search_retrieval
 from math_agent_api.services.session_service import (
     append_artifact,
     append_message,
@@ -167,9 +167,19 @@ async def stream_chat_with_provider(
     )
     if db is not None and should_attempt_retrieval:
         try:
-            retrieval = search_retrieval(db=db, query=active_message, top_k=5)
+            if request_mentions_uploaded_material(active_message):
+                retrieval = search_material_overview(db=db, query=active_message, top_k=5)
+            else:
+                retrieval = search_retrieval(db=db, query=active_message, top_k=5)
             retrieval_attempted = True
             retrieved_sources = retrieval.results
+            if (
+                not retrieved_sources
+                and has_ready_documents
+                and request_mentions_uploaded_material(active_message)
+            ):
+                overview = search_material_overview(db=db, query=active_message, top_k=5)
+                retrieved_sources = overview.results
         except Exception:
             retrieval_attempted = True
             retrieved_sources = []

@@ -32,12 +32,28 @@ def search_retrieval(
         if score >= min_score:
             scored.append((score, chunk))
 
-    scored.sort(key=lambda item: (-item[0], item[1].document.filename, item[1].chunk_index))
+    scored.sort(
+        key=lambda item: (
+            -item[0],
+            -item[1].document.updated_at.timestamp(),
+            item[1].document.filename,
+            item[1].chunk_index,
+        )
+    )
     results = [
         _source_from_chunk(index=index + 1, score=score, chunk=chunk, query_terms=query_terms)
         for index, (score, chunk) in enumerate(scored[:top_k])
     ]
     return RetrievalSearchResponse(query=query, results=results)
+
+
+def search_material_overview(
+    db: Session,
+    query: str,
+    top_k: int = 5,
+) -> RetrievalSearchResponse:
+    repo = DocumentRepository(db)
+    return RetrievalSearchResponse(query=query, results=_overview_sources(repo, top_k=top_k))
 
 
 def _score_chunk(query_terms: list[str], query: str, retrieval_text: str) -> float:
@@ -75,9 +91,11 @@ def _source_from_chunk(
 
 def _overview_sources(repo: DocumentRepository, top_k: int) -> list[RetrievedSource]:
     chunks_by_document: dict[str, DocumentChunkRecord] = {}
-    for chunk in repo.list_ready_chunks():
-        if chunk.document_id not in chunks_by_document:
-            chunks_by_document[chunk.document_id] = chunk
+    for document in repo.list_ready_documents():
+        chunks = repo.list_chunks_for_document(document.id)
+        first_chunk = next((chunk for chunk in chunks if chunk.text.strip()), None)
+        if first_chunk is not None:
+            chunks_by_document[document.id] = first_chunk
         if len(chunks_by_document) >= top_k:
             break
 
@@ -94,17 +112,38 @@ def _overview_sources(repo: DocumentRepository, top_k: int) -> list[RetrievedSou
 
 def _is_material_overview_query(query: str) -> bool:
     normalized = query.lower().replace(" ", "")
-    material_markers = ["pdf", "材料", "资料", "课件", "讲义", "教材", "上传", "附件"]
+    material_markers = [
+        "pdf",
+        "材料",
+        "资料",
+        "课件",
+        "讲义",
+        "教材",
+        "上传",
+        "附件",
+        "这份",
+        "这个",
+        "当前",
+        "刚才",
+    ]
     overview_markers = [
         "你能看到",
         "看得到",
         "看到我",
+        "看一下",
         "上传了吗",
         "上传成功",
         "讲了什么",
+        "讲解",
+        "解释",
+        "说明",
+        "总结",
         "什么内容",
+        "内容",
         "有哪些",
         "现在呢",
+        "这份pdf",
+        "这个pdf",
         "thispdf",
         "uploadedpdf",
     ]

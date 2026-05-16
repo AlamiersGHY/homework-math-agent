@@ -66,6 +66,10 @@ def test_plot_preview_surface3d_returns_plotly_surface() -> None:
     assert payload["spec"]["data"][0]["type"] == "surface"
     assert len(payload["spec"]["data"][0]["z"]) == 35
     assert len(payload["spec"]["data"][0]["z"][0]) == 35
+    assert payload["spec"]["layout"]["scene"]["camera"]["eye"]["x"] > 1.5
+    assert payload["spec"]["layout"]["scene"]["dragmode"] == "orbit"
+    assert payload["spec"]["layout"]["scene"]["xaxis"]["range"] == [-3.0, 3.0]
+    assert payload["spec"]["config"]["scrollZoom"] is True
 
 
 def test_plot_preview_surface3d_allows_default_radius_parameter_a() -> None:

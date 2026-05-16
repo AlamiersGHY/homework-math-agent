@@ -67,6 +67,9 @@ OCR_PROVIDER=mock
 DATABASE_URL=sqlite:///math_agent.db
 ```
 
+Relative SQLite URLs are resolved against `apps/api`, so `sqlite:///math_agent.db`
+uses `apps/api/math_agent.db` even if the API process is started from the repo root.
+
 For the current real LLM path, use the OpenAI-compatible settings documented in `apps/api/.env.example`. Live OCR requires:
 
 ```env

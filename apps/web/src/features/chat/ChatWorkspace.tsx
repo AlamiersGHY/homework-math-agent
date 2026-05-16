@@ -158,11 +158,17 @@ export function ChatWorkspace() {
   }, []);
 
   useEffect(() => {
-    transcriptRef.current?.scrollTo({
-      top: transcriptRef.current.scrollHeight,
-      behavior: "smooth"
-    });
+    scrollTranscriptToBottom();
   }, [messages.length, isStreaming]);
+
+  function scrollTranscriptToBottom() {
+    window.requestAnimationFrame(() => {
+      transcriptRef.current?.scrollTo({
+        top: transcriptRef.current.scrollHeight,
+        behavior: "smooth"
+      });
+    });
+  }
 
   async function refreshHealth() {
     try {
@@ -394,6 +400,8 @@ export function ChatWorkspace() {
     const controller = new AbortController();
     abortControllerRef.current = controller;
     let pendingPlotSuggestion: PlotPreviewRequest | null = null;
+    let pendingSources: RetrievedSource[] = [];
+    let pendingRetrievalAttempted = false;
     let activeSessionId = metadata.sessionId;
 
     try {
@@ -429,21 +437,22 @@ export function ChatWorkspace() {
           onMetadata: (data: MetadataEventData) => {
             const sources = data.citations ?? data.retrieved_sources ?? [];
             pendingPlotSuggestion = data.plot_suggestion ?? pendingPlotSuggestion;
+            pendingSources = sources.length > 0 ? sources : pendingSources;
+            pendingRetrievalAttempted =
+              data.retrieval_attempted ?? pendingRetrievalAttempted;
             setMetadata((current) => ({
               ...current,
               questionType: data.question_type,
               shouldVisualize: data.should_visualize,
               plotSuggestion: data.plot_suggestion
             }));
-            if (data.plot_suggestion || data.retrieval_attempted !== undefined || sources.length > 0) {
+            if (data.plot_suggestion) {
               setMessages((current) =>
                 current.map((item) =>
                   item.id === assistantId
                     ? {
                         ...item,
-                        plotSuggestion: data.plot_suggestion ?? item.plotSuggestion,
-                        retrievalAttempted: data.retrieval_attempted ?? item.retrievalAttempted,
-                        retrievedSources: sources.length > 0 ? sources : item.retrievedSources ?? []
+                        plotSuggestion: data.plot_suggestion ?? item.plotSuggestion
                       }
                     : item
                 )
@@ -480,7 +489,9 @@ export function ChatWorkspace() {
                       ...item,
                       id: finalAssistantId,
                       status: "done",
-                      persisted: Boolean(data.assistant_message_id)
+                      persisted: Boolean(data.assistant_message_id),
+                      retrievalAttempted: pendingRetrievalAttempted,
+                      retrievedSources: pendingSources
                     }
                   : item
               )
@@ -682,6 +693,7 @@ export function ChatWorkspace() {
           item.id === messageId ? { ...item, plot, plotLoading: false } : item
         )
       );
+      scrollTranscriptToBottom();
     } catch (caught: unknown) {
       const plotError =
         caught instanceof Error
@@ -1102,7 +1114,7 @@ function MessageBubble({
         {!isUser ? (
           <SourcesPanel
             retrievalAttempted={Boolean(message.retrievalAttempted)}
-            sources={message.retrievedSources ?? []}
+            sources={message.status === "done" ? (message.retrievedSources ?? []) : []}
           />
         ) : null}
         {!isUser && message.plotSuggestion && !message.plot ? (
@@ -1127,6 +1139,7 @@ function MessageBubble({
         {message.plot ? (
           <PlotViewer
             className="mt-4"
+            key={plotViewerKey(message.id, message.plot)}
             onExpand={() => onExpandPlot(message.plot as PlotPreviewResponse)}
             onRenderError={(errorMessage) => onPlotRenderError(`图形渲染失败：${errorMessage}`)}
             plot={message.plot}
@@ -1751,7 +1764,7 @@ function PlotModal({
           </button>
         </div>
         <div className="min-h-0 flex-1 p-4">
-          <PlotViewer plot={plot} size="modal" />
+          <PlotViewer key={plotViewerKey("modal", plot)} plot={plot} size="modal" />
         </div>
       </div>
     </div>
@@ -1963,6 +1976,15 @@ function getPlotTypeLabel(plotType: PlotPreviewResponse["plot_type"]) {
     return "二维区域";
   }
   return "二维函数";
+}
+
+function plotViewerKey(messageId: string, plot: PlotPreviewResponse): string {
+  const title =
+    typeof plot.spec.layout?.title === "object" && plot.spec.layout.title !== null
+      ? JSON.stringify(plot.spec.layout.title)
+      : String(plot.spec.layout?.title ?? "");
+  const dataSignature = JSON.stringify(plot.spec.data ?? []).slice(0, 240);
+  return `${messageId}:${plot.plot_type}:${title}:${dataSignature}`;
 }
 
 function formatPageRange(source: RetrievedSource) {

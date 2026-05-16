@@ -256,3 +256,13 @@
 - Expanded browser QA to cover implicit PDF overview questions and OCR-like surface-integral plotting without exposing `Expression is not valid syntax`.
 - Verified `scripts/qa_real_pdf_rag.py` on 2026-05-16 with `C:\Users\Alami\Downloads\第13讲 复合函数求导法则(2).pdf`: upload produced 36 pages and 36 chunks; retrieval and chat citations referenced page 1 of the real PDF; session metadata persisted citations for history replay.
 - Verified `.\scripts\release-check.ps1` on 2026-05-16 13:27 +08: 70 backend tests passed, 18 deterministic evals passed, frontend typecheck passed, `npm run test:math` passed, frontend build passed, mock API smoke passed, expanded browser QA passed with screenshots under `.cache/qa/20260516-132721`, and dependency audit advisory remained tracked under TD-005.
+
+## Same-Session Plot, Latest-PDF RAG, And Source Timing Fix
+
+- Fixed same-session plot reuse by making planner plot extraction prefer the current user turn before falling back to previous-turn equations; browser QA now covers two different surface plots in a single session.
+- Fixed broad new-PDF RAG questions by resolving relative SQLite paths against `apps/api`, preferring recently updated ready documents, and routing material overview questions such as "给我讲解一下这个pdf" to real latest-document chunks.
+- Delayed frontend source cards until the assistant answer is complete, so citations appear as answer attachments instead of before the response text.
+- Hardened Plotly rendering lifecycle with stable plot keys, container purge/clear before new renders, stale-cleanup protection, scroll zoom/orbit drag, wider default camera, and explicit 3D axis ranges.
+- Verified real PDF QA on `C:\Users\Alami\Downloads\邮雁智记 (1).pdf`: 27 pages, 12 chunks, broad "this pdf" chat citation to page 1, and persisted citation metadata.
+- Verified real PDF QA on `C:\Users\Alami\Downloads\第13讲 复合函数求导法则(2).pdf`: 36 pages, 36 chunks, retrieval/chat citation to page 1, and persisted citation metadata.
+- Verified `.\scripts\release-check.ps1` on 2026-05-16 14:33 +08: 74 backend tests passed, 18 deterministic evals passed, frontend typecheck passed, `npm run test:math` passed, frontend build passed, mock API smoke passed, expanded browser QA passed with screenshots under `.cache/qa/20260516-143333`, and dependency audit advisory remained tracked under TD-005.

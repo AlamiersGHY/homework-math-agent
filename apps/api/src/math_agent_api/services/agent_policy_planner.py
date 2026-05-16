@@ -111,7 +111,9 @@ def _plan_agent_turn(
     planning_text = contextual_message_for_request(request)
     input_source = _input_source(request)
     question_type = question_type_override or classify_question(planning_text)
-    plot_suggestion = create_plot_suggestion(planning_text, question_type)
+    plot_suggestion = create_plot_suggestion(message, question_type)
+    if plot_suggestion is None and message.strip() != planning_text.strip():
+        plot_suggestion = create_plot_suggestion(planning_text, question_type)
     needs_retrieval = _needs_retrieval(message, question_type)
     needs_clarification = _needs_clarification(
         message=message,

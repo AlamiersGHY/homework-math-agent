@@ -177,6 +177,10 @@ async function waitForText(page, regex, label) {
   assertOk(regex.test(text), label);
 }
 
+function latestPlot(page) {
+  return page.locator("article").last().locator(".js-plotly-plot").last();
+}
+
 async function uploadSamplePdf(page) {
   const pdfBuffer = Buffer.from(SAMPLE_PDF_BASE64, "base64");
   await page.locator('input[accept="application/pdf,.pdf"]').setInputFiles({
@@ -248,6 +252,8 @@ async function runDesktopFlow(browser, baseUrl, screenshotDir) {
 
   await page.locator("textarea").first().fill("解释一下 uniform continuity definition");
   await page.getByRole("button", { name: /^\u53d1\u9001$/ }).click();
+  const earlyCitationCount = await page.getByText(/\u5f15\u7528\u6750\u6599/).count();
+  assertOk(earlyCitationCount === 0, "citation panel rendered before the answer completed");
   await waitForText(page, /\u5f15\u7528\u6750\u6599/, "desktop citation panel did not render");
   await waitForText(page, /analysis-notes\.pdf/, "desktop citation filename did not render");
   const ragSessions = await page.evaluate(async () => {
@@ -329,7 +335,7 @@ async function runDesktopFlow(browser, baseUrl, screenshotDir) {
     hemispherePlotPayload.expression === "sqrt(a^2 - x^2 - y^2)",
     "hemisphere request did not use the expected parameterized surface"
   );
-  await assertPlotlyCanvasPainted(page, page.locator(".js-plotly-plot").first(), "desktop hemisphere plot");
+  await assertPlotlyCanvasPainted(page, latestPlot(page), "desktop hemisphere plot");
   await assertViewportFit(page, "desktop hemisphere plot");
   await page.screenshot({ path: path.join(screenshotDir, "desktop-hemisphere-plot.jpg"), type: "jpeg", quality: 84 });
 
@@ -348,11 +354,30 @@ async function runDesktopFlow(browser, baseUrl, screenshotDir) {
     /sqrt/.test(surfaceIntegralPlotPayload.expression) && !/^I\s*=/.test(surfaceIntegralPlotPayload.expression),
     "surface integral OCR-like request used the integral assignment as the plot expression"
   );
-  await assertPlotlyCanvasPainted(page, page.locator(".js-plotly-plot").first(), "desktop surface integral plot");
+  await assertPlotlyCanvasPainted(page, latestPlot(page), "desktop surface integral plot");
   const surfaceIntegralText = await page.locator("body").innerText();
   assertOk(!surfaceIntegralText.includes("Expression is not valid syntax"), "surface integral plot exposed raw syntax error");
   await assertViewportFit(page, "desktop surface integral plot");
   await page.screenshot({ path: path.join(screenshotDir, "desktop-surface-integral-plot.jpg"), type: "jpeg", quality: 84 });
+
+  await page.locator("textarea").first().fill("画一下 z = x^2 + y^2 的三维曲面");
+  const firstSameSessionPlotPromise = page.waitForRequest((request) => request.url().includes("/plots/preview"));
+  await page.getByRole("button", { name: /^\u53d1\u9001$/ }).click();
+  const firstSameSessionPlotRequest = await firstSameSessionPlotPromise;
+  const firstSameSessionPayload = JSON.parse(firstSameSessionPlotRequest.postData() || "{}");
+  assertOk(firstSameSessionPayload.expression === "x^2 + y^2", "same-session first plot used the wrong expression");
+  await assertPlotlyCanvasPainted(page, latestPlot(page), "desktop same-session first plot");
+
+  await page.locator("textarea").first().fill("画一下 z = y^2 - x^2 的三维曲面");
+  const secondSameSessionPlotPromise = page.waitForRequest((request) => request.url().includes("/plots/preview"));
+  await page.getByRole("button", { name: /^\u53d1\u9001$/ }).click();
+  const secondSameSessionPlotRequest = await secondSameSessionPlotPromise;
+  const secondSameSessionPayload = JSON.parse(secondSameSessionPlotRequest.postData() || "{}");
+  assertOk(secondSameSessionPayload.expression === "y^2 - x^2", "same-session second plot reused the previous expression");
+  assertOk(secondSameSessionPayload.expression !== firstSameSessionPayload.expression, "same-session plots were not isolated");
+  await assertPlotlyCanvasPainted(page, latestPlot(page), "desktop same-session second plot");
+  await assertViewportFit(page, "desktop same-session second plot");
+  await page.screenshot({ path: path.join(screenshotDir, "desktop-same-session-second-plot.jpg"), type: "jpeg", quality: 84 });
 
   await page.getByRole("button", { name: /\u65b0\u5efa/ }).first().click();
   await page.locator("article").first().waitFor({ state: "detached", timeout: 15000 }).catch(() => undefined);
@@ -379,7 +404,7 @@ async function runDesktopFlow(browser, baseUrl, screenshotDir) {
     typeof automaticPlotPayload.expression === "string" && !/sin\s*\(/i.test(automaticPlotPayload.expression),
     "implicit 3D question used a sin fallback expression"
   );
-  await assertPlotlyCanvasPainted(page, page.locator(".js-plotly-plot").first(), "desktop implicit 3D plot");
+  await assertPlotlyCanvasPainted(page, latestPlot(page), "desktop implicit 3D plot");
   assertOk(
     (await page.getByRole("button", { name: /\u751f\u6210\u53ef\u89c6\u5316\u56fe\u5f62|\u751f\u6210\u56fe\u5f62/ }).count()) === 0,
     "implicit 3D plot required a manual generate click"
@@ -397,7 +422,7 @@ async function runDesktopFlow(browser, baseUrl, screenshotDir) {
       !/sin\s*\(/i.test(String(plotArtifact.payload?.plot?.expression ?? automaticPlotPayload.expression)),
     "persisted implicit 3D plot fell back to sin"
   );
-  const plotBox = await page.locator(".js-plotly-plot").boundingBox();
+  const plotBox = await latestPlot(page).boundingBox();
   assertOk(plotBox && plotBox.width > 400 && plotBox.height > 250, "desktop plot rendered too small");
   await assertViewportFit(page, "desktop plot");
   await assertNoRawDebugText(page);
@@ -416,7 +441,7 @@ async function runDesktopFlow(browser, baseUrl, screenshotDir) {
   await page.reload({ waitUntil: "networkidle" });
   await page.getByText("Math Agent").waitFor({ timeout: 15000 });
   await page.getByRole("button", { name: /x\^4 \+ y\^4 \+ z\^4/ }).first().click();
-  await assertPlotlyCanvasPainted(page, page.locator(".js-plotly-plot").first(), "desktop history implicit 3D plot");
+  await assertPlotlyCanvasPainted(page, latestPlot(page), "desktop history implicit 3D plot");
   assertOk((await page.getByRole("button", { name: /\u751f\u6210\u53ef\u89c6\u5316\u56fe\u5f62/ }).count()) === 0, "history restored only a plot suggestion");
   await assertViewportFit(page, "desktop history plot");
   await page.screenshot({ path: path.join(screenshotDir, "desktop-history-plot.jpg"), type: "jpeg", quality: 84 });
@@ -431,7 +456,7 @@ async function runDesktopFlow(browser, baseUrl, screenshotDir) {
   const functionPlotRequest = await functionPlotRequestPromise;
   const functionPlotPayload = JSON.parse(functionPlotRequest.postData() || "{}");
   assertOk(functionPlotPayload.plot_type === "function2d", "function visualization did not auto-request function2d plot");
-  await assertPlotlyDomRendered(page, page.locator(".js-plotly-plot").first(), "desktop function plot");
+  await assertPlotlyDomRendered(page, latestPlot(page), "desktop function plot");
   const suggestionOnlySessions = await page.evaluate(async () => {
     const response = await fetch("http://127.0.0.1:8011/sessions");
     return response.json();
@@ -441,7 +466,7 @@ async function runDesktopFlow(browser, baseUrl, screenshotDir) {
   await page.getByText("Math Agent").waitFor({ timeout: 15000 });
   const suggestionTitle = suggestionOnlySessions[0].title;
   await page.getByRole("button", { name: new RegExp(suggestionTitle.slice(0, 18).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")) }).first().click();
-  await assertPlotlyDomRendered(page, page.locator(".js-plotly-plot").first(), "desktop history function plot");
+  await assertPlotlyDomRendered(page, latestPlot(page), "desktop history function plot");
   const suggestionDetail = await page.evaluate(async (id) => {
     const response = await fetch(`http://127.0.0.1:8011/sessions/${id}`);
     return response.json();

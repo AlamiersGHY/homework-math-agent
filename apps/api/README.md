@@ -47,6 +47,8 @@ DATABASE_URL=sqlite:///math_agent.db
 ```
 
 This stores sessions, messages, and future OCR/plot artifacts in `apps/api/math_agent.db`. The database file is ignored by Git.
+Relative SQLite paths are resolved against `apps/api`, not the caller's shell
+working directory, so upload/list/chat all use the same local demo database.
 
 ## OCR Provider
 

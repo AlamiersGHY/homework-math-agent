@@ -28,6 +28,8 @@ export function PlotViewer({
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const onRenderErrorRef = useRef(onRenderError);
+  const renderIdRef = useRef(0);
+  const plotlyRef = useRef<PlotlyModule | null>(null);
   const heightClass = size === "modal" ? "h-[62vh] min-h-[420px]" : "h-[280px] sm:h-[380px]";
 
   useEffect(() => {
@@ -35,29 +37,40 @@ export function PlotViewer({
   }, [onRenderError]);
 
   useEffect(() => {
-    let cancelled = false;
+    const renderId = renderIdRef.current + 1;
+    renderIdRef.current = renderId;
     const element = containerRef.current;
     if (!element) {
       return;
     }
 
     async function renderPlot() {
-      const plotly = (await import("plotly.js-dist-min")) as unknown as PlotlyModule;
-      if (!cancelled && element) {
-        await plotly.newPlot(
-          element,
-          Array.isArray(plot.spec.data) ? plot.spec.data : [],
-          plot.spec.layout,
-          {
-            responsive: true,
-            displaylogo: false,
-            ...(plot.spec.config ?? {})
-          }
-        );
+      const plotly =
+        plotlyRef.current ??
+        ((await import("plotly.js-dist-min")) as unknown as PlotlyModule);
+      plotlyRef.current = plotly;
+      if (renderIdRef.current !== renderId || !element) {
+        return;
       }
+      plotly.purge(element);
+      element.replaceChildren();
+      await plotly.newPlot(
+        element,
+        Array.isArray(plot.spec.data) ? plot.spec.data : [],
+        plot.spec.layout,
+        {
+          responsive: true,
+          displaylogo: false,
+          scrollZoom: plot.plot_type === "surface3d" || plot.plot_type === "implicit3d",
+          ...(plot.spec.config ?? {})
+        }
+      );
     }
 
     renderPlot().catch((caught: unknown) => {
+      if (renderIdRef.current !== renderId) {
+        return;
+      }
       const message =
         caught instanceof Error ? caught.message : "Plotly render failed";
       console.error("Plot render failed", caught);
@@ -68,14 +81,13 @@ export function PlotViewer({
     });
 
     return () => {
-      cancelled = true;
-      import("plotly.js-dist-min")
-        .then((plotly) => {
-          if (element) {
-            (plotly as unknown as PlotlyModule).purge(element);
-          }
-        })
-        .catch(() => undefined);
+      const plotly = plotlyRef.current;
+      if (plotly && element && renderIdRef.current === renderId) {
+        plotly.purge(element);
+      }
+      if (renderIdRef.current === renderId) {
+        renderIdRef.current += 1;
+      }
     };
   }, [plot]);
 

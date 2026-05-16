@@ -134,6 +134,41 @@ async def test_chat_stream_probes_uploaded_material_for_course_topic(isolated_da
 
 
 @pytest.mark.asyncio
+async def test_chat_stream_uses_latest_material_overview_for_this_pdf_question(isolated_database) -> None:
+    with isolated_database.SessionLocal() as db:
+        ingest_pdf_document(
+            db=db,
+            content=_build_pdf(["Definition. Old analysis notes."]),
+            filename="old-analysis.pdf",
+            content_type="application/pdf",
+        )
+        ingest_pdf_document(
+            db=db,
+            content=_build_pdf(["Project Background. AI note app overview and MVP showcase."]),
+            filename="new-project-notes.pdf",
+            content_type="application/pdf",
+        )
+        events = [
+            event
+            async for event in stream_chat_with_provider(
+                request=ChatStreamRequest(
+                    message="给我讲解一下这个pdf",
+                    answer_mode="guided",
+                ),
+                session_id="session-latest-material-overview",
+                provider=FakeProvider(),
+                db=db,
+            )
+        ]
+
+    metadata = _first_event_data("".join(events), "metadata")
+
+    assert metadata["retrieval_attempted"] is True
+    assert metadata["retrieved_sources"]
+    assert metadata["citations"][0]["filename"] == "new-project-notes.pdf"
+
+
+@pytest.mark.asyncio
 async def test_chat_stream_does_not_fabricate_sources_when_retrieval_is_empty(isolated_database) -> None:
     with isolated_database.SessionLocal() as db:
         events = [

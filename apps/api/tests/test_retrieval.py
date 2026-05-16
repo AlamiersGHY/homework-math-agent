@@ -105,6 +105,19 @@ def test_material_overview_query_returns_real_uploaded_source(isolated_database)
     assert results[0]["page_start"] == 1
 
 
+def test_material_overview_prefers_latest_uploaded_document(isolated_database) -> None:
+    client = TestClient(app)
+    _upload_pdf(client, "old-notes.pdf", ["Definition. Old document content."])
+    _upload_pdf(client, "new-notes.pdf", ["Project summary. New uploaded document overview."])
+
+    response = client.post("/retrieval/search", json={"query": "给我讲解一下这个pdf", "top_k": 1})
+    results = response.json()["results"]
+
+    assert response.status_code == 200
+    assert results
+    assert results[0]["filename"] == "new-notes.pdf"
+
+
 def _upload_pdf(client: TestClient, filename: str, pages: list[str]) -> None:
     response = client.post(
         "/documents/upload",

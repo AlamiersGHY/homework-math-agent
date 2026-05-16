@@ -219,6 +219,46 @@ def test_contextual_spatial_request_uses_previous_equation() -> None:
     assert plan.plot_suggestion.expression == "x^4 + y^4 + z^4 = 1"
 
 
+def test_current_spatial_equation_overrides_previous_session_equation() -> None:
+    plan = plan_agent_turn(
+        ChatStreamRequest(
+            message="画一下 z = y^2 - x^2 的三维曲面",
+            answer_mode="direct",
+            context={
+                "previous_turns": [
+                    {"role": "user", "content": "画一下 z = x^2 + y^2 的三维曲面"}
+                ]
+            },
+        )
+    )
+
+    assert plan.question_type == QuestionType.VISUALIZATION
+    assert plan.needs_plot is True
+    assert plan.plot_type == PlotType.SURFACE3D
+    assert plan.plot_suggestion is not None
+    assert plan.plot_suggestion.expression == "y^2 - x^2"
+
+
+def test_current_implicit_equation_overrides_previous_session_implicit_equation() -> None:
+    plan = plan_agent_turn(
+        ChatStreamRequest(
+            message="画一下 x^2 + y^2 + z^2 = 1 的三维图形",
+            answer_mode="direct",
+            context={
+                "previous_turns": [
+                    {"role": "user", "content": "画一下 x^4 + y^4 + z^4 = 1 的三维图形"}
+                ]
+            },
+        )
+    )
+
+    assert plan.question_type == QuestionType.VISUALIZATION
+    assert plan.needs_plot is True
+    assert plan.plot_type == PlotType.IMPLICIT3D
+    assert plan.plot_suggestion is not None
+    assert plan.plot_suggestion.expression == "x^2 + y^2 + z^2 = 1"
+
+
 def test_broad_request_asks_for_clarification_and_records_weak_point() -> None:
     plan = plan_agent_turn(
         ChatStreamRequest(message="我完全不懂数学分析，帮我学一下", answer_mode="guided")

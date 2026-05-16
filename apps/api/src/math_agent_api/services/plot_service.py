@@ -32,6 +32,13 @@ DEFAULT_PARAMETER_VALUES = {"a": 1.0}
 MAX_SAMPLES_2D = 120
 MAX_SAMPLES_3D_AXIS = 35
 FUNCTION_ALIASES = {"ln": "log"}
+PLOTLY_3D_CONFIG = {
+    "responsive": True,
+    "displaylogo": False,
+    "scrollZoom": True,
+    "displayModeBar": True,
+    "modeBarButtonsToRemove": ["toImage", "sendDataToCloud"],
+}
 
 
 def create_plot_preview(request: PlotPreviewRequest) -> PlotPreviewResponse:
@@ -189,6 +196,8 @@ def _create_surface3d(request: PlotPreviewRequest) -> PlotPreviewResponse:
         [_safe_eval(evaluator, {x_name: x, y_name: y}) for x in xs]
         for y in ys
     ]
+    z_values = [value for row in z_grid for value in row if value is not None]
+    z_range = _padded_range(z_values)
     spec = {
         "data": [
             {
@@ -210,14 +219,17 @@ def _create_surface3d(request: PlotPreviewRequest) -> PlotPreviewResponse:
         "layout": {
             "title": {"text": f"z = {request.expression}"},
             "scene": {
-                "xaxis": {"title": x_name},
-                "yaxis": {"title": y_name},
-                "zaxis": {"title": "z"},
-                "camera": {"eye": {"x": 1.45, "y": 1.45, "z": 1.05}},
+                "xaxis": {"title": x_name, "range": [x_start, x_end], "showspikes": False},
+                "yaxis": {"title": y_name, "range": [y_start, y_end], "showspikes": False},
+                "zaxis": {"title": "z", "range": z_range, "showspikes": False},
+                "aspectmode": "cube",
+                "camera": {"eye": {"x": 1.75, "y": 1.75, "z": 1.35}},
+                "dragmode": "orbit",
             },
+            "uirevision": f"surface3d:{request.expression}:{x_start:g}:{x_end:g}:{y_start:g}:{y_end:g}",
             "margin": {"l": 0, "r": 0, "t": 48, "b": 0},
         },
-        "config": {"responsive": True, "displaylogo": False},
+        "config": PLOTLY_3D_CONFIG,
     }
     return PlotPreviewResponse(
         plot_type=PlotType.SURFACE3D,
@@ -347,15 +359,17 @@ def _create_implicit3d(request: PlotPreviewRequest) -> PlotPreviewResponse:
         "layout": {
             "title": {"text": request.expression},
             "scene": {
-                "xaxis": {"title": x_name},
-                "yaxis": {"title": y_name},
-                "zaxis": {"title": z_name},
+                "xaxis": {"title": x_name, "range": [x_start, x_end], "showspikes": False},
+                "yaxis": {"title": y_name, "range": [y_start, y_end], "showspikes": False},
+                "zaxis": {"title": z_name, "range": [z_start, z_end], "showspikes": False},
                 "aspectmode": "cube",
-                "camera": {"eye": {"x": 1.45, "y": 1.45, "z": 1.15}},
+                "camera": {"eye": {"x": 1.75, "y": 1.75, "z": 1.35}},
+                "dragmode": "orbit",
             },
+            "uirevision": f"implicit3d:{request.expression}:{x_start:g}:{x_end:g}:{y_start:g}:{y_end:g}:{z_start:g}:{z_end:g}",
             "margin": {"l": 0, "r": 0, "t": 48, "b": 0},
         },
-        "config": {"responsive": True, "displaylogo": False},
+        "config": PLOTLY_3D_CONFIG,
     }
     return PlotPreviewResponse(
         plot_type=PlotType.IMPLICIT3D,
@@ -421,6 +435,20 @@ def _iso_band(values: list[float]) -> float:
     span = max_value - min_value
     band = max(span * 0.002, 1e-4)
     return round(band, 6)
+
+
+def _padded_range(values: list[float]) -> list[float] | None:
+    if not values:
+        return None
+    minimum = min(values)
+    maximum = max(values)
+    if not math.isfinite(minimum) or not math.isfinite(maximum):
+        return None
+    if math.isclose(minimum, maximum):
+        padding = max(1.0, abs(minimum) * 0.2)
+    else:
+        padding = (maximum - minimum) * 0.08
+    return [minimum - padding, maximum + padding]
 
 
 def _compile_expression(expression: str, variables: set[str]):

@@ -40,6 +40,21 @@ def _get_float(name: str, default: float) -> float:
         return default
 
 
+def _resolve_database_url(value: str) -> str:
+    if not value.startswith("sqlite:///"):
+        return value
+
+    sqlite_path = value.removeprefix("sqlite:///")
+    if sqlite_path == ":memory:":
+        return value
+
+    path = Path(sqlite_path)
+    if path.is_absolute():
+        return value
+
+    return f"sqlite:///{(API_ROOT / path).as_posix()}"
+
+
 @dataclass(frozen=True)
 class Settings:
     database_url: str
@@ -77,7 +92,9 @@ class Settings:
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
     return Settings(
-        database_url=_get_env("DATABASE_URL", f"sqlite:///{API_ROOT / 'math_agent.db'}"),
+        database_url=_resolve_database_url(
+            _get_env("DATABASE_URL", f"sqlite:///{(API_ROOT / 'math_agent.db').as_posix()}")
+        ),
         cors_allow_origins=[
             origin.strip()
             for origin in _get_env(
