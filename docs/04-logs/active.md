@@ -225,6 +225,11 @@ Continue from the verified PDF RAG, citation, attachment UX, and automatic plot 
 - Browser QA now covers direct-mode follow-up suggestions, refresh/reopen history replay of suggestions, and composer-adjacent display without assistant-bubble duplicate controls.
 - `.\scripts\check.ps1` passed on 2026-05-16 20:45 +08 after the LLM-generated follow-up metadata unit: 86 backend tests, 18 deterministic evals, frontend typecheck, math-rendering normalization tests, and frontend production build completed.
 - `.\scripts\browser-qa.ps1` passed on 2026-05-16 20:43 +08; browser QA screenshots are under `.cache/qa/20260516-204329`.
+- User feedback on 2026-05-16 identified that the visible follow-up suggestions still looked like deterministic fallback suggestions, and a live check confirmed the currently running `127.0.0.1:8000` dev process was stale: it emitted only one chat metadata event and no `quick_replies` / `quick_reply_source` fields.
+- The backend follow-up generation path is now hardened: mock providers are explicitly treated as fallback-only, the follow-up prompt is clear JSON-only text, and parser coverage accepts JSON arrays, common object payload fields, and numbered-list model output without misclassifying ordinary prose as LLM suggestions.
+- The frontend now only uses deterministic quick-reply fallback for older restored history that has no `quick_reply_source`; live streamed assistant messages no longer synthesize fallback chips when the backend fails to return follow-up metadata, so stale backend processes are visible instead of masked.
+- Live verification now has a dedicated repeatable script, `scripts/smoke_live_followups.py`, and `.\scripts\release-check.ps1 -LiveLLM` runs it after the base live LLM smoke. It requires final chat metadata with `quick_reply_source=llm`.
+- Targeted verification passed on 2026-05-16: `scripts/smoke_live_followups.py` returned `quick_reply_source=llm` from the configured `deepseek-v4-flash` provider, a latest-source temporary FastAPI process on port `8017` returned two metadata events with final `quick_reply_source=llm`, `apps/api/tests/test_chat_stream.py` passed (`22 passed`), frontend `npm.cmd run typecheck` passed, `.\scripts\check.ps1` passed (`88` backend tests, `18` evals, frontend typecheck, math rendering tests, and production build), and `.\scripts\browser-qa.ps1 -SkipBuild` passed with screenshots under `.cache/qa/20260516-212542`.
 
 ## Next Tasks
 
@@ -233,6 +238,7 @@ Continue from the verified PDF RAG, citation, attachment UX, and automatic plot 
 - Improve retrieval ranking/chunking after the v1 lexical baseline only if tests and ADR updates keep citation safety intact.
 - Defer live Doubao OCR smoke until the configured `DOUBAO_VISION_MODEL` points to an accessible Ark endpoint.
 - Restart any long-running local FastAPI/Next dev processes that were started before this unit; non-reload uvicorn and built Next bundles will not pick up these fixes until restarted.
+- Restart the user's current `127.0.0.1:8000` and `127.0.0.1:3000` dev processes before retesting follow-up suggestions; the observed running API process still serves stale code with no final follow-up metadata.
 
 ## Blockers
 
@@ -272,4 +278,5 @@ Continue from the verified PDF RAG, citation, attachment UX, and automatic plot 
 - Direct, guided, and hint modes should expose composer-adjacent, contextual next-step suggestions after assistant answers; backend should prefer LLM-generated suggestions and mark fallback suggestions with `quick_reply_source="fallback"`. Quick replies must send as normal chat messages without accidentally including pending composer attachments.
 - Before finalizing a coding task, run the relevant app-local tests or explain what could not be verified.
 - Release validation should use `.\scripts\release-check.ps1`; pass `-LiveLLM` only when real LLM credentials are locally configured.
+- Live follow-up validation should use `$env:PYTHONPATH="apps/api/src"; apps/api/.venv/Scripts/python.exe scripts/smoke_live_followups.py` or `.\scripts\release-check.ps1 -LiveLLM`; a passing base chat smoke alone does not prove `quick_replies` came from the LLM.
 - After completing a coherent deliverable unit, create a local Git checkpoint commit unless blocked by unrelated changes or explicit user instruction.

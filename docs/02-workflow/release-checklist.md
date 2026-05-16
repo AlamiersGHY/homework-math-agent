@@ -47,6 +47,8 @@
 .\scripts\release-check.ps1 -LiveLLM
 ```
 
+`-LiveLLM` 同时验证后端生成的推荐追问，最终 chat metadata 必须返回 `quick_reply_source=llm`。
+
 Doubao OCR live smoke 仍需真实 `DOUBAO_API_KEY` 和 `DOUBAO_VISION_MODEL`，没有凭据时不得把 live OCR 视为已通过。
 
 如果某项暂时无法运行，应记录为发布风险，而不是默认为通过。

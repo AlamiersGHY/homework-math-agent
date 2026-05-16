@@ -320,3 +320,11 @@
 - Extended backend tests for LLM-generated suggestion metadata, JSON-fence parsing, direct/hint suggestions, and persisted fallback source.
 - Extended browser QA for direct-mode suggestions and refresh/history replay of the suggestion bar.
 - Verified `.\scripts\check.ps1` on 2026-05-16 20:45 +08 and `.\scripts\browser-qa.ps1` on 2026-05-16 20:43 +08; browser QA screenshots are under `.cache/qa/20260516-204329`.
+
+## Live Follow-Up Suggestion Verification Fix
+
+- Diagnosed the user-visible fallback suggestions as two separate issues: the currently running `127.0.0.1:8000` API process was stale and emitted no follow-up metadata, while the previous live smoke did not verify `quick_reply_source`.
+- Hardened follow-up generation so mock providers remain fallback-only, real provider output is requested with a clear JSON-only prompt, and parser coverage accepts JSON arrays, common object payload fields, and numbered-list output.
+- Changed the frontend so live streamed messages do not synthesize deterministic fallback suggestions when backend follow-up metadata is absent; deterministic fallback remains only for older restored sessions with no `quick_reply_source`.
+- Added `scripts/smoke_live_followups.py` and wired it into `.\scripts\release-check.ps1 -LiveLLM`, making live LLM verification require final metadata with `quick_reply_source=llm`.
+- Verified on 2026-05-16 with the configured `deepseek-v4-flash` provider: live follow-up smoke returned `quick_reply_source=llm`; a latest-source temporary FastAPI process on port `8017` returned two metadata events with final `quick_reply_source=llm`; `apps/api/tests/test_chat_stream.py` passed with `22 passed`; frontend typecheck passed; `.\scripts\check.ps1` passed with `88` backend tests, `18` evals, frontend typecheck, math rendering tests, and production build; `.\scripts\browser-qa.ps1 -SkipBuild` passed with screenshots under `.cache/qa/20260516-212542`.

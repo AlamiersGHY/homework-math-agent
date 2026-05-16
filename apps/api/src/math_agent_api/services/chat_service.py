@@ -57,13 +57,15 @@ def format_sse(event: str, data: dict) -> str:
     return f"event: {event}\ndata: {payload}\n\n"
 
 
-QUICK_REPLY_SYSTEM_PROMPT = """你是 Math Agent 的追问建议生成器。
-根据用户本轮问题和刚刚生成的回答，生成 3 个“用户下一轮可能点击发送”的追问。
-要求：
-- 必须贴合当前题目和回答内容，不能写成泛泛的“给我提示/继续讲”。
-- 优先是苏格拉底式问题、下一步检查问题、变式问题。
-- 每条 8 到 26 个汉字左右，适合按钮显示。
-- 只返回 JSON 数组，例如 ["问题一？","问题二？","问题三？"]，不要解释。"""
+QUICK_REPLY_SYSTEM_PROMPT = """You generate follow-up suggestion chips for Math Agent.
+
+Return exactly 3 short Chinese suggestions that the user could click as the next message.
+Each suggestion must be tightly grounded in the current user question and the just-finished assistant answer.
+Prefer Socratic next-step questions, checks, variants, or likely follow-up questions.
+Do not use generic labels such as "继续", "给我提示", or "再讲讲".
+Return only a JSON array of 3 strings, for example:
+["为什么这一步成立？","能换一种方法验证吗？","如果条件改变会怎样？"]
+"""
 
 
 async def stream_mock_chat(request: ChatStreamRequest) -> AsyncIterator[str]:
@@ -337,13 +339,16 @@ async def generate_quick_replies(
 ) -> tuple[list[str], str]:
     if not assistant_answer.strip():
         return build_quick_replies(plan, user_message), "fallback"
+    if getattr(provider, "name", "") == "mock":
+        return build_quick_replies(plan, user_message), "fallback"
 
     prompt = (
-        f"题型: {plan.question_type.value}\n"
-        f"回答模式: {plan.answer_mode.value}\n"
-        f"用户问题:\n{user_message[:1200]}\n\n"
-        f"刚刚的回答:\n{assistant_answer[:2400]}\n\n"
-        "请返回 3 个追问建议。"
+        f"Question type: {plan.question_type.value}\n"
+        f"Answer mode: {plan.answer_mode.value}\n"
+        f"User question:\n{user_message[:1200]}\n\n"
+        f"Assistant answer:\n{assistant_answer[:2400]}\n\n"
+        "Generate exactly 3 grounded Chinese follow-up suggestions. "
+        "Return only JSON, no Markdown, no prose."
     )
     try:
         chunks: list[str] = []
@@ -369,14 +374,29 @@ def parse_quick_reply_json(text: str) -> list[str]:
     fenced = re.search(r"```(?:json)?\s*(.*?)```", cleaned, flags=re.DOTALL | re.IGNORECASE)
     if fenced:
         cleaned = fenced.group(1).strip()
-    if not cleaned.startswith("["):
-        array_match = re.search(r"\[[\s\S]*\]", cleaned)
-        if array_match:
-            cleaned = array_match.group(0)
-    try:
-        payload = json.loads(cleaned)
-    except json.JSONDecodeError:
-        return []
+    payload: object | None = None
+    candidates = [cleaned]
+    array_match = re.search(r"\[[\s\S]*\]", cleaned)
+    if array_match:
+        candidates.append(array_match.group(0))
+    object_match = re.search(r"\{[\s\S]*\}", cleaned)
+    if object_match:
+        candidates.append(object_match.group(0))
+    for candidate in candidates:
+        try:
+            payload = json.loads(candidate)
+            break
+        except json.JSONDecodeError:
+            continue
+
+    if isinstance(payload, dict):
+        for key in ("quick_replies", "replies", "suggestions", "followups", "follow_ups"):
+            value = payload.get(key)
+            if isinstance(value, list):
+                payload = value
+                break
+    if payload is None:
+        payload = _parse_quick_reply_lines(cleaned)
     if not isinstance(payload, list):
         return []
     replies: list[str] = []
@@ -394,6 +414,23 @@ def parse_quick_reply_json(text: str) -> list[str]:
         if len(replies) == 3:
             break
     return replies if len(replies) == 3 else []
+
+
+def _parse_quick_reply_lines(text: str) -> list[str]:
+    replies: list[str] = []
+    for raw_line in text.splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+        if not re.match(r"^\s*(?:[-*]|\d+[.)]|[一二三]\s*[、.])\s+", line):
+            continue
+        line = re.sub(r"^\s*(?:[-*]|\d+[.)]|[一二三]\s*[、.])\s+", "", line).strip()
+        line = line.strip("\"'“”")
+        if line:
+            replies.append(line)
+        if len(replies) == 3:
+            break
+    return replies
 
 
 def _should_probe_retrieval(message: str, question_type: QuestionType) -> bool:

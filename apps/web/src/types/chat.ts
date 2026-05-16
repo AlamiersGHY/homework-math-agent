@@ -33,6 +33,7 @@ export type ChatMessage = {
   plotLoading?: boolean;
   plotError?: string | null;
   quickReplies?: string[];
+  quickReplySource?: "llm" | "fallback" | "pending";
 };
 
 export type ChatMessageAttachment = {

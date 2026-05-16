@@ -314,7 +314,11 @@ export function ChatWorkspace() {
                 []
               : [],
           quickReplies:
-            message.role === "assistant" ? metadataLookup.get(message.id)?.quick_replies ?? [] : []
+            message.role === "assistant" ? metadataLookup.get(message.id)?.quick_replies ?? [] : [],
+          quickReplySource:
+            message.role === "assistant"
+              ? metadataLookup.get(message.id)?.quick_reply_source
+              : undefined
         };
       });
 
@@ -472,6 +476,7 @@ export function ChatWorkspace() {
     let pendingSources: RetrievedSource[] = [];
     let pendingRetrievalAttempted = false;
     let pendingQuickReplies: string[] = [];
+    let pendingQuickReplySource: ChatMessage["quickReplySource"];
     let activeSessionId = metadata.sessionId;
 
     try {
@@ -512,7 +517,9 @@ export function ChatWorkspace() {
             pendingSources = sources.length > 0 ? sources : pendingSources;
             pendingRetrievalAttempted =
               data.retrieval_attempted ?? pendingRetrievalAttempted;
-            pendingQuickReplies = data.quick_replies ?? pendingQuickReplies;
+            if (data.quick_reply_source) {
+              pendingQuickReplySource = data.quick_reply_source;
+            }
             setMetadata((current) => ({
               ...current,
               questionType: data.question_type,
@@ -533,12 +540,14 @@ export function ChatWorkspace() {
             }
             const nextQuickReplies = toQuickReplies(data.quick_replies);
             if (nextQuickReplies.length > 0) {
+              pendingQuickReplies = nextQuickReplies;
               setMessages((current) =>
                 current.map((item) =>
                   item.id === assistantId
                     ? {
                         ...item,
-                        quickReplies: nextQuickReplies
+                        quickReplies: nextQuickReplies,
+                        quickReplySource: data.quick_reply_source
                       }
                     : item
                 )
@@ -578,7 +587,8 @@ export function ChatWorkspace() {
                       persisted: Boolean(data.assistant_message_id),
                       retrievalAttempted: pendingRetrievalAttempted,
                       retrievedSources: pendingSources,
-                      quickReplies: pendingQuickReplies
+                      quickReplies: pendingQuickReplies,
+                      quickReplySource: pendingQuickReplySource
                     }
                   : item
               )
@@ -2452,6 +2462,9 @@ function getLatestQuickReplies(messages: ChatMessage[]): string[] {
       const storedReplies = toQuickReplies(message.quickReplies);
       if (storedReplies.length > 0) {
         return storedReplies;
+      }
+      if (message.quickReplySource !== undefined) {
+        return [];
       }
       if (message.status !== "done") {
         continue;

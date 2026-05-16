@@ -30,6 +30,7 @@ Project-level scripts now wrap the app-local commands through these stable entry
 | `.\scripts\check.ps1` | Run backend tests, evals, frontend typecheck, focused math-rendering tests, and frontend build sequentially. |
 | `.\scripts\browser-qa.ps1` | Run production-build desktop/mobile Playwright QA against mock API/OCR. |
 | `.\scripts\release-check.ps1` | Run full local release validation: `check`, mock API smoke, browser QA, and dependency audit advisory. |
+| `$env:PYTHONPATH="apps/api/src"; apps/api/.venv/Scripts/python.exe scripts/smoke_live_followups.py` | Verify the configured real OpenAI-compatible LLM returns backend-generated follow-up suggestions with `quick_reply_source=llm`. |
 | `$env:PYTHONPATH="apps/api/src"; apps/api/.venv/Scripts/python.exe scripts/qa_real_pdf_rag.py --pdf "<local.pdf>"` | Run a temporary-DB user-level PDF RAG QA flow with a real local PDF: upload, chunking, retrieval, chat citations, and history metadata. |
 
 Still planned:
@@ -48,7 +49,7 @@ Still planned:
 - `check.ps1` includes `npm run test:math` so formula normalization regressions are caught before build/browser QA.
 - `browser-qa.ps1` rebuilds the frontend with the QA API base URL before starting `next start`; this avoids stale `NEXT_PUBLIC_API_BASE_URL` bundles.
 - `release-check.ps1` treats `npm audit --omit=dev` findings as advisory by default because TD-005 is tracked; pass `-StrictAudit` to fail on audit findings.
-- `release-check.ps1 -LiveLLM` also runs the real OpenAI-compatible LLM smoke when local credentials are configured.
+- `release-check.ps1 -LiveLLM` also runs the real OpenAI-compatible LLM smoke and the follow-up suggestion smoke when local credentials are configured.
 - `smoke_api.py` forces mock LLM/OCR providers and uses a temporary SQLite file so release smoke does not depend on external keys. It also covers local PDF upload, retrieval, chat citation metadata, and document deletion.
 - `qa_real_pdf_rag.py` also forces mock LLM/OCR and a temporary SQLite file; use it when a user reports a PDF/RAG issue with a specific local file that should not be committed into the repository.
 

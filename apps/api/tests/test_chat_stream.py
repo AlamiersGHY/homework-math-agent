@@ -440,7 +440,7 @@ class FollowUpProvider:
     name = "follow-up"
 
     async def stream_chat(self, messages: Sequence[dict[str, str]]) -> AsyncIterator[str]:
-        if messages[0]["content"].startswith("你是 Math Agent 的追问建议生成器"):
+        if "follow-up suggestion chips" in messages[0]["content"]:
             yield '["这一步为什么成立？","还有没有反例？","下一步我该验证什么？"]'
             return
         yield "先说明核心思路，再让学生自己补下一步。"
@@ -482,6 +482,18 @@ def test_parse_quick_reply_json_accepts_fenced_json() -> None:
         "二？",
         "三？",
     ]
+
+
+def test_parse_quick_reply_json_accepts_object_payload() -> None:
+    assert parse_quick_reply_json(
+        '{"quick_replies":["为什么要先用夹逼？","能换泰勒展开吗？","变成 sin(2x) 怎么办？"]}'
+    ) == ["为什么要先用夹逼？", "能换泰勒展开吗？", "变成 sin(2x) 怎么办？"]
+
+
+def test_parse_quick_reply_json_accepts_numbered_lines() -> None:
+    assert parse_quick_reply_json(
+        "1. 为什么这里能取极限？\n2. 能用图像解释吗？\n3. 换成 tan x 会怎样？"
+    ) == ["为什么这里能取极限？", "能用图像解释吗？", "换成 tan x 会怎样？"]
 
 
 @pytest.mark.asyncio

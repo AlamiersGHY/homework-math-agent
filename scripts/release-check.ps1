@@ -28,6 +28,9 @@ if ($LiveLLM) {
     Invoke-LoggedCommand "Live LLM smoke" {
         & $apiPython (Join-Path $repoRoot "scripts\smoke_live_llm.py")
     }
+    Invoke-LoggedCommand "Live LLM follow-up smoke" {
+        & $apiPython (Join-Path $repoRoot "scripts\smoke_live_followups.py")
+    }
 }
 
 if (-not $SkipAudit) {
@@ -53,4 +56,4 @@ if (-not $SkipAudit) {
 
 Write-Host ""
 Write-Host "Release check completed. Live OCR still requires Doubao credentials for provider smoke."
-Write-Host "Pass -LiveLLM to include the real OpenAI-compatible LLM smoke when local credentials are configured."
+Write-Host "Pass -LiveLLM to include the real OpenAI-compatible LLM and follow-up suggestion smokes when local credentials are configured."
