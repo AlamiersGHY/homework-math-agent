@@ -27,9 +27,8 @@ Math Agent 不是通用聊天机器人，而是一个围绕数学学习过程设
 
 线上地址后续部署完成后补充：
 
-- 前端体验地址：待补充
-- 后端健康检查：待补充
-
+- 前端体验地址：https://math-agent-web.vercel.app/
+- 后端健康检查：https://math-agent-api-no60.onrender.com/health
 ## 本地启动
 
 ### 1. 安装后端依赖
@@ -131,7 +130,7 @@ NEXT_PUBLIC_API_BASE_URL=http://127.0.0.1:8000
 ```
 
 更多产品范围、系统架构、API 契约和当前进度可以查看 `docs/INDEX.md`。
-
+ 
 ## 部署说明
 
 当前推荐的第一阶段部署方式：
